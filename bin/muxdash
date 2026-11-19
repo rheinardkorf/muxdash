@@ -67,7 +67,7 @@
 # Sources are scripts named <name>, looked up in two places, first match wins:
 #   ~/.config/muxdash/sources/      your own (and your copy of a built-in one, to change it)
 #   $MUXDASH_HOME/sources/          muxdash's built-in ones
-# (MUXDASH_HOME: muxdash's own files, hud/ lib/ sources/; today that's ~/.config/muxdash too)
+# (MUXDASH_HOME: muxdash's own files, hud/ lib/ sources/: the checkout bin/muxdash is in)
 #   <source> fetch <query>   print the items as JSON: [{id, title, status, updated, url, key?, at?, seen?}]
 #                            (updated in epoch seconds; key: a shorter id for the list;
 #                            at: a start time to count down to; seen: the key seen
@@ -85,7 +85,7 @@
 #                            only (muxdash renders it with glow)
 #   <source> search <words>  optional: "<id>\t<snippet>" for each cached item whose
 #                            content has all the words (used by alt-f)
-#   <source> run <name> <id>  optional: an action that does something (feature-flags:
+#   <source> run <name> <id>  optional: an action that does something (dynamodb-feature-flags:
 #                            toggle); prints one line; exit 0 = changed, and the source
 #                            has updated its cache: muxdash then re-lists the view with
 #                            MUXDASH_FETCH_LOCAL=1 (fetch from the cache only, no calls)
@@ -124,13 +124,13 @@ path=(/opt/homebrew/bin(N) /usr/local/bin(N) /home/linuxbrew/.linuxbrew/bin(N)
       /Applications/kitty.app/Contents/MacOS(N) $path)
 typeset -U path
 
+self="${0:A}"   # the real file, through any symlink: the checkout it lives in
 MUXDASH_CONFIG_DIR="${MUXDASH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/muxdash}"
 MUXDASH_CACHE="${MUXDASH_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/muxdash}"
-MUXDASH_HOME="${MUXDASH_HOME:-$MUXDASH_CONFIG_DIR}"   # muxdash's own files: hud/, lib/, built-in sources/
+MUXDASH_HOME="${MUXDASH_HOME:-${self:h:h}}"   # muxdash's own files: hud/, lib/, built-in sources/
 export MUXDASH_CONFIG_DIR MUXDASH_HOME                # sources find lib/ through MUXDASH_HOME
 SESSION=muxdash
 FETCHER_SESSION=muxdash-fetcher   # the fetcher's own session: out of the way of muxdash's windows
-self="${0:A}"
 
 die() { print -u2 "muxdash: $*"; exit 1 }
 

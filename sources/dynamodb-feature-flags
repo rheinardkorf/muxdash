@@ -3,15 +3,15 @@
 # a DynamoDB feature-flags library uses), through the aws CLI. Read-only, except
 # `run toggle` (alt-t), which turns one flag on or off once you've said yes.
 #
-#   feature-flags fetch <table>          every flag in the table, alphabetical
-#   feature-flags fetch <region>:<table>   (a table in another region)
-#   feature-flags preview <id>           a flag as Markdown, from the cache
-#   feature-flags search <words>         "<id>\t<snippet>" for flags matching all the words
-#   feature-flags summary <view>         the HUD's line (and a sentence when a flag
-#                                        changed within the pane's recent window)
-#   feature-flags confirm toggle <id>    the question muxdash asks first (a Yes/No popup)
-#   feature-flags run toggle <id>        turn the flag on / off: the same write as
-#                                        the library's enableFeature / disableFeature
+#   dynamodb-feature-flags fetch <table>         every flag in the table, alphabetical
+#   dynamodb-feature-flags fetch <region>:<table>  (a table in another region)
+#   dynamodb-feature-flags preview <id>          a flag as Markdown, from the cache
+#   dynamodb-feature-flags search <words>        "<id>\t<snippet>" for flags matching all the words
+#   dynamodb-feature-flags summary <view>        the HUD's line (and a sentence when a flag
+#                                                changed within the pane's recent window)
+#   dynamodb-feature-flags confirm toggle <id>   the question muxdash asks first (a Yes/No popup)
+#   dynamodb-feature-flags run toggle <id>       turn the flag on / off: the same write as
+#                                                the library's enableFeature / disableFeature
 #
 # Each flag is one item: pk = FEAT#<name>, sk = A, name, description, type,
 # updatedAt; it's on when pk1 = FEAT#ENABLED (the partition the library's GSI
@@ -20,11 +20,10 @@
 # read of the whole table per fetch (small tables: ~120 read units for 6,000
 # items), hence a long fetch cycle and ctrl-r for now.
 #
-# Config (.sources.feature-flags, in config.local.json: table names stay out of
-# the repo):
+# Config (.sources.dynamodb-feature-flags; table names are best kept in config.local.json):
 #   profile      AWS profile (required)
 #   region       default region (default: the profile's)
-#   login_hint   shown when the session has expired, e.g. "use aws-mfa-login"
+#   login_hint   shown when the session has expired, e.g. "use aws sso login"
 #   schema       overrides, as the library's: featureItemPK, featureItemSK,
 #                featureItemSKValue, featureItemPrefix, lookupIndexPK,
 #                featureItemEnabledPartition
@@ -65,7 +64,7 @@ JQ_PLAIN='def plain: if type != "object" then . else
 
 fetch() {
   local query=$1 region table out
-  [[ -n $profile ]] || fail "no profile: set sources.feature-flags.profile"
+  [[ -n $profile ]] || fail "no profile: set sources.dynamodb-feature-flags.profile"
   [[ -n $query ]] || fail "no table: give the view a table name (region:table for another region)"
   if [[ $query == *:* ]]; then region=${query%%:*} table=${query#*:}
   else table=$query region="$(jq -r '.region // empty' <<<"$conf")"; fi
@@ -132,7 +131,7 @@ search() {
 # summary <view>: "10 flags · 4 on", and a sentence for flags changed within the
 # pane's recent window
 summary() {
-  jq -c -L "${MUXDASH_HOME:-${MUXDASH_CONFIG_DIR:-$HOME/.config/muxdash}}/lib" 'include "summary";
+  jq -c -L "$MUXDASH_HOME/lib" 'include "summary";
     . as $f | [.items[] | select(.status == "on")] as $on
     | [.items[] | fresh($f)] as $changed
     | {line: "\(.count) flags · \($on | length) on", word: "read"}
@@ -195,7 +194,7 @@ toggle() {
     map(if ._name == ($new.name // ($new[$schema.featureItemPK] | ltrimstr($schema.featureItemPrefix)))
         then $new + {_table, _region, _name, _on: ($new[$schema.lookupIndexPK] == $schema.featureItemEnabledPartition)}
         else . end)' $file > $file.tmp && mv $file.tmp $file
-  print -r -- "$name is ${(U)want} · running apps see it within ~30s"
+  print -r -- "$name is ${(U)want}"
   return 0
 }
 
@@ -208,11 +207,11 @@ case $1 in
   run)
     case $2 in
       toggle) toggle "$3" ;;
-      *) print -u2 "feature-flags: unknown action '$2' (try: toggle)"; exit 1 ;;
+      *) print -u2 "dynamodb-feature-flags: unknown action '$2' (try: toggle)"; exit 1 ;;
     esac ;;
   fetch)   fetch "$2" ;;
   preview) preview "$2" ;;
   search)  search "$2" ;;
   summary) summary "$2" ;;
-  *) print -u2 "usage: feature-flags fetch [region:]<table> | preview <id> | search <words> | summary <view>"; exit 1 ;;
+  *) print -u2 "usage: dynamodb-feature-flags fetch [region:]<table> | preview <id> | search <words> | summary <view>"; exit 1 ;;
 esac

@@ -2,7 +2,7 @@
 # muxdash's tmux keys. Load it from tmux.conf, through a plugin manager
 # (set -g @plugin ...) or directly:
 #
-#   run-shell ~/.config/muxdash/muxdash.tmux
+#   run-shell /path/to/muxdash/muxdash.tmux
 #
 # Options, set before it loads (all optional):
 #   @muxdash-bin       the muxdash engine      (default: bin/muxdash next to this file)

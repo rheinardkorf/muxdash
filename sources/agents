@@ -325,9 +325,9 @@ event() {
 }
 
 # summary <view>: the HUD's line (and briefing sentences) for one view, from the
-# facts on stdin (see ~/.config/muxdash/lib/summary.jq); prints JSON
+# facts on stdin (see lib/summary.jq); prints JSON
 summary() {
-  jq -c -L "${MUXDASH_HOME:-${MUXDASH_CONFIG_DIR:-$HOME/.config/muxdash}}/lib" 'include "summary";
+  jq -c -L "$MUXDASH_HOME/lib" 'include "summary";
     def name: if (.key // "·") != "·" then .key else (.title | clean | split(" ")[0]) end;
     [.items[] | select(.kind != null and (.id | startswith("sub:") | not))] as $s
     | ([$s[] | select(.status == "busy")] | length) as $busy

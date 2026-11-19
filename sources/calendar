@@ -124,9 +124,9 @@ search() {
 }
 
 # summary <view>: the HUD's line (and briefing sentences) for one view, from the
-# facts on stdin (see ~/.config/muxdash/lib/summary.jq); prints JSON
+# facts on stdin (see lib/summary.jq); prints JSON
 summary() {
-  jq -c -L "${MUXDASH_HOME:-${MUXDASH_CONFIG_DIR:-$HOME/.config/muxdash}}/lib" 'include "summary";
+  jq -c -L "$MUXDASH_HOME/lib" 'include "summary";
     .now as $now
     | if .next then ((.next.at - $now) as $in | (.next.title | clean) as $t
         | {line: "next: \($t) in \($in | span)", word: "synced",

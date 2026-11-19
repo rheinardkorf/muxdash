@@ -100,7 +100,7 @@ internally:
   changes), SQS queues (dead-letter queues with messages first).
 - **calendar** (gog, always `--readonly`): today and the next days, with a
   countdown and RSVP state.
-- **feature-flags** (aws CLI, read-only): flags kept in DynamoDB as
+- **dynamodb-feature-flags** (aws CLI, read-only): flags kept in DynamoDB as
   single-table items (`pk = FEAT#<name>`, `sk = A`; on when
   `pk1 = FEAT#ENABLED`). One view per table (`table` or
   `region:table`); a filtered scan per fetch, since disabled flags are only in

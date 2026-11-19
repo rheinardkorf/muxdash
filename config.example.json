@@ -14,9 +14,10 @@
     "meaning": "Adaptive Daily Attendant",
     "voice": "bf_isabella",
     "lang": "en-gb",
-    // HUD-only sources: just a summary (no pane); the key runs "open"
-    "sources": [{"source": "streak", "title": "Streak", "key": "s",
-                 "open": "~/.scripts/kitty-panel streak ~/.scripts/streak --width=600 --height=340 --edge=center-sized --opacity=1"}],
+    // HUD-only sources: just a summary (no pane); the key runs "open". Usually
+    // one of your own (~/.config/muxdash/sources/), e.g.
+    //   {"source": "habits", "title": "Habits", "key": "h", "open": "open -a Reminders"}
+    "sources": [],
     // optional, the look: a preset (arc, ember, matrix, nebula) or a few roles
     // changed (primary, secondary, ring, accent, radar, alert: a Catppuccin name
     // or #rrggbb), and the reactor's pattern (shape: sides, 0 = none)

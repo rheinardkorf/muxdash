@@ -10,7 +10,7 @@ write everything to a cache. You only read that cache, through the `read` script
 skill's folder: no network, no API calls. If the cache doesn't have something, say so; don't
 go looking for it elsewhere (no `gh`, no `curl`, no `muxdash fetch`).
 
-Run `~/.config/muxdash/skills/muxdash/read` with one of these, one command at a time.
+Run the `read` script in this skill's folder with one of these, one command at a time.
 
 **A question about everything ("what do I need to know", "anything to worry about") gets
 `read list`** with nothing after it: every pane at once.

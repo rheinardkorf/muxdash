@@ -514,9 +514,9 @@ preview() {
 }
 
 # summary <view>: the HUD's line (and briefing sentences) for one view, from the
-# facts on stdin (see ~/.config/muxdash/lib/summary.jq); prints JSON
+# facts on stdin (see lib/summary.jq); prints JSON
 summary() {
-  jq -c -L "${MUXDASH_HOME:-${MUXDASH_CONFIG_DIR:-$HOME/.config/muxdash}}/lib" 'include "summary";
+  jq -c -L "$MUXDASH_HOME/lib" 'include "summary";
     if .view == "alarms" then
       if .bad > 0 then (.bad | count("alarm"; "alarms")) as $a | (if .bad == 1 then "is" else "are" end) as $are
         | {line: "\(.bad) alarms firing", state: "attention",

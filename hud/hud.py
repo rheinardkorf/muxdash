@@ -644,7 +644,7 @@ class Hud:
         self.keys = letters([r[0] for r in self.rows], chosen)
         self.jumps = {k: next((w for w, ps in windows.items() if pane in ps), None)
                       for k, pane in zip(self.keys, panes) if k}
-        # HUD-only sources: their key runs their "open" command instead (e.g. the streak logger)
+        # HUD-only sources: their key runs their "open" command instead (e.g. a logger of your own)
         opens = {f["pane"]: f.get("open") for f in self.units if f.get("hud_only") and f.get("open")}
         self.opens = {k: opens[pane] for k, pane in zip(self.keys, panes) if k and pane in opens}
         self.sentences = briefing(self.job, self.units, self.now)

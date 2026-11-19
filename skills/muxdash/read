@@ -13,7 +13,8 @@
 #   read show <pane> <id>      one item in detail, as Markdown (the source's preview)
 #   read search <pane> <words> items whose content has the words (sources that support it)
 setopt err_exit no_unset pipe_fail
-cache=${MUXDASH_CACHE:-$HOME/.cache/muxdash}
+cache=${MUXDASH_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/muxdash}
+home=${MUXDASH_HOME:-${0:A:h:h:h}}   # the muxdash checkout this skill is in (built-in sources)
 config=( $cache/config.*.json(N) )
 (( $#config )) || { print -u2 "read: no muxdash cache at $cache (is muxdash running?)"; exit 1; }
 config=$config[1]
@@ -33,11 +34,12 @@ fresh() { jq -r "$AGE"' if .fetched_at then "fetched \(.fetched_at | age) ago" e
 run_source() {
   local src=$(source_of $1) dir
   [[ -n $src ]] || die "no pane '$1'; try: read panes"
-  for dir in $HOME/.config/muxdash/sources ${MUXDASH_HOME:-$HOME/.config/muxdash}/sources; do
+  for dir in ${MUXDASH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/muxdash}/sources $home/sources; do
     [[ -x $dir/$src ]] && break
   done
   [[ -x $dir/$src ]] || die "no source script for '$src'"
   MUXDASH_SOURCE_CACHE=$cache/sources/$src \
+  MUXDASH_HOME=$home \
   MUXDASH_SOURCE_CONFIG="$(jq -c --arg s $src '.sources[$s] // {}' $config)" \
     $dir/$src "${@:2}"
 }
