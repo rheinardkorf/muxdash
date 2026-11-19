@@ -1,0 +1,90 @@
+#!/usr/bin/env zsh
+# read: panel's cache, for a model (the panel skill). Reads ~/.cache/panel only: never fetches,
+# never changes anything. The filtering lives here so the model reads 20 lines, not 200 (a
+# "what's failing" question pulled 190 green Actions runs into its context), and each command is
+# plain enough for harkness to offer "always allow".
+#
+#   read panes                 the panes: source, views, how fresh each list is
+#   read list                  every pane (a question about everything)
+#   read list <pane>[/<view>]  counts by status, then what needs attention (failing, ● or ?)
+#                              and the most recent; a short list is shown whole. A pane with
+#                              views and no view named: each of its views in turn
+#   read all <pane>[/<view>]   every item
+#   read show <pane> <id>      one item in detail, as Markdown (the source's preview)
+#   read search <pane> <words> items whose content has the words (sources that support it)
+setopt err_exit no_unset pipe_fail
+cache=${PANEL_CACHE:-$HOME/.cache/panel}
+config=( $cache/config.*.json(N) )
+(( $#config )) || { print -u2 "read: no panel cache at $cache (is panel running?)"; exit 1; }
+config=$config[1]
+die() { print -u2 "read: $*"; exit 1; }
+
+# Age of an epoch time, short: 5m, 3h, 2d.
+AGE='def dur: if . < 3600 then "\(. / 60 | floor)m" elif . < 86400 then "\(. / 3600 | floor)h" else "\(. / 86400 | floor)d" end; def age: now - . | dur;'
+ROW='def row: [(.mark // " "), (.key // ""), (.status // ""), (if (.at // 0) > now then "in " + (.at - now | dur) else (.updated | age) + " ago" end), .title, .id] | @tsv;'
+
+source_of() { jq -r --arg p "$1" '.panes[$p].source // empty' $config; }
+unit_dir() {
+  local d=$cache/panes/$1
+  [[ -f $d/items.json ]] || die "no list for '$1'; try: read panes"
+  print -r -- $d
+}
+fresh() { jq -r "$AGE"' if .fetched_at then "fetched \(.fetched_at | age) ago" else "never fetched" end' $1/meta.json 2>/dev/null || print "fetched ?"; }
+run_source() {
+  local src=$(source_of $1) dir
+  [[ -n $src ]] || die "no pane '$1'; try: read panes"
+  for dir in $HOME/.config/panel/sources ${PANEL_HOME:-$HOME/.config/panel}/sources; do
+    [[ -x $dir/$src ]] && break
+  done
+  [[ -x $dir/$src ]] || die "no source script for '$src'"
+  PANEL_SOURCE_CACHE=$cache/sources/$src \
+  PANEL_SOURCE_CONFIG="$(jq -c --arg s $src '.sources[$s] // {}' $config)" \
+    $dir/$src "${@:2}"
+}
+
+case ${1:-} in
+  panes)
+    jq -r '.panes | to_entries[] | select(.value.source) | [.key, .value.source,
+      (.value.views // null | if type == "object" then keys elif type == "array" then . else [] end | join(" "))] | @tsv' $config |
+    while IFS=$'\t' read -r pane src views; do
+      if [[ -n $views ]]; then
+        print -r -- "$pane ($src): read list $pane for all of these"
+        for v in ${=views}; do [[ -f $cache/panes/$pane/$v/items.json ]] &&
+          print -r -- "  $pane/$v  $(jq length $cache/panes/$pane/$v/items.json) items, $(fresh $cache/panes/$pane/$v)"; done
+      elif [[ -f $cache/panes/$pane/items.json ]]; then
+        print -r -- "$pane ($src): read list $pane  ($(jq length $cache/panes/$pane/items.json) items, $(fresh $cache/panes/$pane))"
+      fi
+    done ;;
+  list|all)
+    if [[ -z ${2:-} ]]; then # every pane that has a list
+      [[ $1 == all ]] && die "usage: read all <pane>[/<view>]"
+      for p in $(jq -r '.panes | to_entries[] | select(.value.source) | .key' $config); do
+        [[ -d $cache/panes/$p ]] && { $0 list $p; print; }
+      done
+      exit 0
+    fi
+    if [[ $2 != */* && ! -f $cache/panes/$2/items.json && -d $cache/panes/$2 ]]; then # every view
+      for v in $cache/panes/$2/*/items.json(N); do v=${v:h:t}; $0 $1 $2/$v; print; done
+      exit 0
+    fi
+    d=$(unit_dir $2)
+    print -r -- "$2: $(fresh $d)  (columns: mark, key, status, when, title, id)"
+    jq -r --arg mode $1 "$AGE $ROW"'
+      def bad: ((.status // "") | test("fail|error|✗|alarm|broken|timed.?out|cancel"; "i")) or (.mark // "" | test("[●?◆]"));
+      sort_by(-(.updated // 0)) as $all |
+      if $mode == "all" or ($all | length) <= 25 then $all[] | row
+      else
+        ($all | group_by(.status // "") | map("\(length) \(.[0].status // "(none)")") | join(" · ")),
+        "-- needs attention:", ([$all[] | select(bad)] | if length == 0 then "(nothing)" else (.[:25][] | row), (if length > 25 then "… \(length - 25) more" else empty end) end),
+        "-- most recent:", ([$all[] | select(bad | not)][:5][] | row),
+        "-- \($all | length) items in all; read all for every one"
+      end' $d/items.json ;;
+  show)
+    [[ -n ${2:-} && -n ${3:-} ]] || die "usage: read show <pane> <id>"
+    run_source ${2%%/*} preview $3 < /dev/null ;;
+  search)
+    [[ -n ${2:-} && -n ${3:-} ]] || die "usage: read search <pane> <words>"
+    run_source ${2%%/*} search "${*:3}" < /dev/null || die "'${2%%/*}' can't search" ;;
+  *)
+    sed -n '/^#   read/p' $0 | sed 's/^#   //'; exit 1 ;;
+esac
