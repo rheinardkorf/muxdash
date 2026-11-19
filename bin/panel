@@ -871,45 +871,69 @@ pane_cmd() {
 
 # up [layout]: build the session from the layout; if it's already there, repair
 # it: add the windows the layout has and the session lacks (in the layout's
-# order). Windows are known by @panel_name; nothing is removed, reordered or
-# changed. The fetcher runs in its own session (panel-fetcher), started if it
-# isn't running; an old fetch window in the panel session is moved out.
+# order), and restart the ones that lost their program: every pane panel starts
+# is marked (@panel_pane), so a window with no marked pane is a leftover, e.g. a
+# plain shell a tmux restore (tmux-resurrect) brought back under the same name.
+# Windows are known by @panel_name, or their name without the ●N count;
+# nothing else is removed, reordered or changed. The fetcher runs in its own
+# session (panel-fetcher), started or restarted the same way; an old fetch
+# window in the panel session is moved out.
 up() {
-  local layout=${1:-$(default_layout)} win w prev="" p id name
-  local -a panes added
-  local -A have
+  local layout=${1:-$(default_layout)} win w prev="" p id name live
+  local -a panes added restarted
+  local -A have stale
   [[ -n $layout ]] || die "no layouts in the config"
   [[ -n "$(conf --arg l $layout '.layouts[$l] // empty')" ]] || die "unknown layout: $layout"
   if tmux has-session -t "=$SESSION" 2>/dev/null; then
     tmux list-windows -t "=$SESSION:" -F '#{window_id} #{?@panel_name,#{@panel_name},#{window_name}}' |
-      while read -r id name; do have[$name]=$id; done
+      while read -r id name; do
+        name=${name%% [●◆]*}
+        have[$name]=$id
+        live="$(tmux list-panes -t $id -F '#{@panel_pane}' | tr -d '[:space:]')"
+        [[ -n $live ]] || stale[$name]=1
+      done
   fi
   for win in ${(f)"$(conf --arg l $layout '.layouts[$l] | keys_unsorted[]')"}; do
-    if [[ -n $have[$win] ]]; then prev=$have[$win]; continue; fi
+    if [[ -n $have[$win] && -z $stale[$win] ]]; then prev=$have[$win]; continue; fi
     panes=( ${(f)"$(conf --arg l $layout --arg w $win '.layouts[$l][$w][]')"} )
-    if ! tmux has-session -t "=$SESSION" 2>/dev/null; then
+    if [[ -n $have[$win] ]]; then   # a leftover: its first pane starts the program again, in place
+      w=$have[$win]
+      tmux kill-pane -a -t "$w.{top-left}" 2>/dev/null
+      tmux respawn-pane -k -t "$w.{top-left}" -c ~ "$(pane_cmd $panes[1])"
+      tmux rename-window -t $w $win
+      restarted+=( $win )
+    elif ! tmux has-session -t "=$SESSION" 2>/dev/null; then
       w="$(tmux new-session -d -s $SESSION -n $win -c ~ -P -F '#{window_id}' "$(pane_cmd $panes[1])")"
     elif [[ -n $prev ]]; then   # right after the window before it in the layout
       w="$(tmux new-window -d -a -t $prev -n $win -c ~ -P -F '#{window_id}' "$(pane_cmd $panes[1])")"
     else                        # the layout's first window: in front
       w="$(tmux new-window -d -b -t "=$SESSION:^" -n $win -c ~ -P -F '#{window_id}' "$(pane_cmd $panes[1])")"
     fi
-    (( $#have )) && added+=( $win )
+    [[ -z $have[$win] ]] && (( $#have )) && added+=( $win )
     tmux set-option -w -t $w @panel_name $win
     tmux set-option -w -t $w allow-passthrough on   # preview images (kitty graphics) get through
-    for p in $panes[2,-1]; do tmux split-window -d -h -t $w -c ~ "$(pane_cmd $p)"; done
+    tmux set-option -p -t "$w.{top-left}" @panel_pane $panes[1]
+    for p in $panes[2,-1]; do
+      tmux set-option -p -t "$(tmux split-window -d -h -t $w -c ~ -P -F '#{pane_id}' "$(pane_cmd $p)")" @panel_pane $p
+    done
     (( $#panes > 1 )) && tmux select-layout -t $w even-horizontal >/dev/null
     prev=$w
   done
   if ! tmux has-session -t "=$FETCHER_SESSION" 2>/dev/null; then
-    tmux new-session -d -s $FETCHER_SESSION -n fetch -c ~ "$self fetcher $layout"
+    w="$(tmux new-session -d -s $FETCHER_SESSION -n fetch -c ~ -P -F '#{pane_id}' "$self fetcher $layout")"
+    tmux set-option -p -t $w @panel_pane fetcher
     (( $#have )) && added+=( "the $FETCHER_SESSION session" )
+  elif [[ -z "$(tmux display -p -t "=$FETCHER_SESSION:" '#{@panel_pane}')" ]]; then   # restored, not running
+    tmux respawn-pane -k -t "=$FETCHER_SESSION:" -c ~ "$self fetcher $layout"
+    tmux set-option -p -t "=$FETCHER_SESSION:" @panel_pane fetcher
+    restarted+=( "the fetcher" )
   fi
   if [[ -n $have[fetch] ]]; then   # the fetcher used to be a window of panel itself
     tmux kill-window -t $have[fetch]
     print "panel: the fetcher now runs in the $FETCHER_SESSION session (its window in $SESSION is gone)"
   fi
   (( $#added )) && print "panel: added ${(j:, :)added}"
+  (( $#restarted )) && print "panel: restarted ${(j:, :)restarted}"
   [[ -n $PANEL_DETACHED ]] && return 0
   if [[ -n $TMUX ]]; then tmux switch-client -t "=$SESSION"; else tmux attach -t "=$SESSION"; fi
 }

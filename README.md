@@ -135,7 +135,10 @@ internally:
   context, one pane per entry. The fetcher runs in its own session,
   `panel-fetcher` (`tmux attach -t panel-fetcher` to watch it). Run again, it repairs the
   session: windows the layout has but the session lacks (known by their
-  `@panel_name`) come back in the layout's order; nothing else is touched.
+  `@panel_name`) come back in the layout's order, and windows or a fetcher
+  that lost their program (a tmux restore such as tmux-resurrect brings them
+  back as plain shells) start it again in place. Every pane panel starts is
+  marked (`@panel_pane`), which is how it tells. Nothing else is touched.
   `panel up -d` does the same without switching to it. **hyper+p**
   (Hammerspoon, `~/.scripts/panel-open`) opens the session from anywhere:
   it switches the last-used tmux client to it and brings kitty forward, or opens
