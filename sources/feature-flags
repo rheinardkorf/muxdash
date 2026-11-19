@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# panel source: feature flags kept in DynamoDB as single-table items (the layout
+# muxdash source: feature flags kept in DynamoDB as single-table items (the layout
 # a DynamoDB feature-flags library uses), through the aws CLI. Read-only, except
 # `run toggle` (alt-t), which turns one flag on or off once you've said yes.
 #
@@ -9,7 +9,7 @@
 #   feature-flags search <words>         "<id>\t<snippet>" for flags matching all the words
 #   feature-flags summary <view>         the HUD's line (and a sentence when a flag
 #                                        changed within the pane's recent window)
-#   feature-flags confirm toggle <id>    the question panel asks first (a Yes/No popup)
+#   feature-flags confirm toggle <id>    the question muxdash asks first (a Yes/No popup)
 #   feature-flags run toggle <id>        turn the flag on / off: the same write as
 #                                        the library's enableFeature / disableFeature
 #
@@ -32,8 +32,8 @@ emulate -L zsh
 setopt extendedglob pipefail
 zmodload zsh/datetime
 
-cache="${PANEL_SOURCE_CACHE:?run me through panel}"
-conf="${PANEL_SOURCE_CONFIG:-}"
+cache="${MUXDASH_SOURCE_CACHE:?run me through muxdash}"
+conf="${MUXDASH_SOURCE_CONFIG:-}"
 [[ -n $conf ]] || conf='{}'
 profile="$(jq -r '.profile // empty' <<<"$conf")"
 hint="$(jq -r '.login_hint // empty' <<<"$conf")"
@@ -71,8 +71,8 @@ fetch() {
   else table=$query region="$(jq -r '.region // empty' <<<"$conf")"; fi
   [[ -n $region ]] || region="$(aws configure get region --profile "$profile" 2>/dev/null)"
   mkdir -p $cache
-  # after a toggle (PANEL_FETCH_LOCAL): just list the cached flags again, no scan
-  if [[ -n $PANEL_FETCH_LOCAL ]]; then
+  # after a toggle (MUXDASH_FETCH_LOCAL): just list the cached flags again, no scan
+  if [[ -n $MUXDASH_FETCH_LOCAL ]]; then
     [[ -f "$cache/${region}__$table.json" ]] || fail "nothing cached for $table yet"
     render "$cache/${region}__$table.json"
     return
@@ -92,7 +92,7 @@ fetch() {
   render "$cache/${region}__$table.json"
 }
 
-# render <cache file>: the cached flags as panel items, alphabetical
+# render <cache file>: the cached flags as muxdash items, alphabetical
 render() {
   jq '
     def epoch: if . == null then null else sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601 end;
@@ -132,7 +132,7 @@ search() {
 # summary <view>: "10 flags · 4 on", and a sentence for flags changed within the
 # pane's recent window
 summary() {
-  jq -c -L "${PANEL_HOME:-${PANEL_CONFIG_DIR:-$HOME/.config/panel}}/lib" 'include "summary";
+  jq -c -L "${MUXDASH_HOME:-${MUXDASH_CONFIG_DIR:-$HOME/.config/muxdash}}/lib" 'include "summary";
     . as $f | [.items[] | select(.status == "on")] as $on
     | [.items[] | fresh($f)] as $changed
     | {line: "\(.count) flags · \($on | length) on", word: "read"}

@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# panel source: GitHub pull requests and Actions runs, through gh (gh auth login).
+# muxdash source: GitHub pull requests and Actions runs, through gh (gh auth login).
 #
 #   github fetch <query>   search PRs (GitHub search syntax, e.g. "is:open is:pr
 #                          review-requested:@me"), and refresh the cached details
@@ -11,7 +11,7 @@
 #   github preview <id>    a PR, a run or a person as Markdown, from the cache
 #   github search <words>  contributions: people whose PRs or repos have the words
 #
-# Config (.sources.github in panel's config), all optional:
+# Config (.sources.github in muxdash's config), all optional:
 #   actions.repos         ["owner/repo", ...]: always watched
 #   actions.active_days   how far back your activity counts (default 14)
 #   actions.runs_days     how far back runs are listed (default 14)
@@ -24,8 +24,8 @@ emulate -L zsh
 setopt extendedglob pipefail
 zmodload zsh/datetime
 
-cache="${PANEL_SOURCE_CACHE:?run me through panel}"
-conf="$PANEL_SOURCE_CONFIG"
+cache="${MUXDASH_SOURCE_CACHE:?run me through muxdash}"
+conf="$MUXDASH_SOURCE_CONFIG"
 [[ -n $conf ]] || conf='{}'
 items="$cache/items"
 FIELDS=number,title,body,author,state,isDraft,reviewDecision,headRefName,baseRefName,additions,deletions,changedFiles,comments,reviews,statusCheckRollup,url,updatedAt,createdAt,labels,mergeable,reviewRequests
@@ -264,7 +264,7 @@ fetch_contributions() {
   local days since org out every age
   local -a orgs
   orgs=( ${(f)"$(jq -r '.contributions.orgs[]? // empty' <<<"$conf")"} )
-  (( $#orgs )) || { print -u2 "no orgs: set sources.github.contributions.orgs in panel's config"; return 1 }
+  (( $#orgs )) || { print -u2 "no orgs: set sources.github.contributions.orgs in muxdash's config"; return 1 }
   days="$(ccfg days)"; days=${days:-30}
   since="$(date -u -r $(( EPOCHSECONDS - days * 86400 )) +%Y-%m-%d)"
   mkdir -p $cache/contrib
@@ -485,9 +485,9 @@ preview() {
 }
 
 # summary <view>: the HUD's line (and briefing sentences) for one view, from the
-# facts on stdin (see ~/.config/panel/lib/summary.jq); prints JSON
+# facts on stdin (see ~/.config/muxdash/lib/summary.jq); prints JSON
 summary() {
-  jq -c -L "${PANEL_HOME:-${PANEL_CONFIG_DIR:-$HOME/.config/panel}}/lib" 'include "summary";
+  jq -c -L "${MUXDASH_HOME:-${MUXDASH_CONFIG_DIR:-$HOME/.config/muxdash}}/lib" 'include "summary";
     def title: .title | clean;
     if .view == "actions" then
       if .bad > 0 then {line: "\(.bad) failing", state: "attention",

@@ -1,22 +1,22 @@
-# panel
+# muxdash
 
-A tmux control panel of fzf lists over cached data. **Sources** fetch data, a
-**cache** holds it, the **engine** (`~/.scripts/panel`) runs everything, and
+A tmux dashboard of fzf lists over cached data. **Sources** fetch data, a
+**cache** holds it, the **engine** (`muxdash`) runs everything, and
 **tmux** shows it. Data only ever moves in one direction:
 
 ```
  Jira / GitHub / AWS / Google        (outside world)     Claude Code hooks
-            │  only the fetcher talks to these               │ panel event agents
+            │  only the fetcher talks to these               │ muxdash event agents
             ▼
  ┌──────────────────────┐   every N min,    ┌──────────────────────────────┐
  │  fetcher (tmux win)  │──runs──────────▶  │  source scripts              │
- │  panel fetcher work  │  per unit         │  ~/.config/panel/sources/*   │
+ │  muxdash fetcher work  │  per unit         │  ~/.config/muxdash/sources/*   │
  └──────────────────────┘                   │  jira · github · aws · calendar
             │                               └──────────────┬───────────────┘
             │ writes                                       │ fetch → JSON items
             ▼                                              ▼
  ┌────────────────────────────────────────────────────────────────────────┐
- │  cache  ~/.cache/panel/                                                │
+ │  cache  ~/.cache/muxdash/                                                │
  │   panes/<pane>[/<view>]/items.json, meta.json   ← the list per unit     │
  │   sources/<source>/…                            ← details for previews  │
  │   seen.json                                     ← what you've looked at │
@@ -24,7 +24,7 @@ A tmux control panel of fzf lists over cached data. **Sources** fetch data, a
             ▲ reads only                           │ "reload" over a socket
             │                                      ▼
  ┌──────────────────────────────────────────────────────────────────────┐
- │  tmux session "panel":  one window per context, one fzf list per pane │
+ │  tmux session "muxdash":  one window per context, one fzf list per pane │
  │  jira · github · aws · calendar · fetch                              │
  └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -32,9 +32,9 @@ A tmux control panel of fzf lists over cached data. **Sources** fetch data, a
 ## 1. Config: what you want to see
 
 `config.<machine>.json` (committed; the machine name comes from
-`$PANEL_MACHINE`, or else the hostname, lowercased: `mando`), with
+`$MUXDASH_MACHINE`, or else the hostname, lowercased: `mando`), with
 `config.local.json` (not committed) merged on top. JSON, with full-line `//`
-comments allowed. See `config.example.json`. These dotfiles set `PANEL_MACHINE`
+comments allowed. See `config.example.json`. These dotfiles set `MUXDASH_MACHINE`
 from `~/.config/machine-name` (`~/.config/zsh/configs/pre/04-machine.zsh`).
 
 - **panes**: a source plus either one `query`, or several `views` (a list of
@@ -45,7 +45,7 @@ from `~/.config/machine-name` (`~/.config/zsh/configs/pre/04-machine.zsh`).
   gets 110 columns, so most windows stack). `"list": "title"` shows rows as just the
   title and its age, and `"count": false` keeps a pane out of its window's ●N
   (rss does both).
-- **layouts**: windows mapped to panes. `panel up <layout>` builds them.
+- **layouts**: windows mapped to panes. `muxdash up <layout>` builds them.
 - **sources**: settings handed to each source script (profiles, orgs,
   exclusions, field labels, …).
 - **global settings**: `seen_after`, `pause_when_idle`, `glow_style`.
@@ -55,11 +55,11 @@ The basic unit is a **unit**: a pane, or one view of a pane (`aws/sqs`,
 
 ## 2. Sources: the only code that knows a service
 
-Each source is a small zsh script in `sources/` with up to three commands. Panel
-looks for it in two places, and the first match wins: `~/.config/panel/sources/`
-(yours), then `$PANEL_HOME/sources/` (panel's built-in ones). `PANEL_HOME` holds
-panel's own files (`hud/`, `lib/`, built-in `sources/`); today it's the same
-`~/.config/panel`, so the two are one folder. To change a built-in source, copy it
+Each source is a small zsh script in `sources/` with up to three commands. muxdash
+looks for it in two places, and the first match wins: `~/.config/muxdash/sources/`
+(yours), then `$MUXDASH_HOME/sources/` (muxdash's built-in ones). `MUXDASH_HOME` holds
+muxdash's own files (`hud/`, `lib/`, built-in `sources/`); today it's the same
+`~/.config/muxdash`, so the two are one folder. To change a built-in source, copy it
 into yours.
 
 
@@ -69,7 +69,7 @@ into yours.
 | `preview <id>` | prints one item as **Markdown** | reads the **cache only** |
 | `search <words>` | prints `id<TAB>snippet` for items whose content matches | cache only (optional) |
 | `summary <view>` | the HUD's say on a view: reads its facts (count, unseen, bad, next, error, items) on stdin, prints `{line, state, word, brief, ticker}` | cache only (optional) |
-| `event` | records an event pushed to it on stdin (`panel event <source>`); exit 0 when something changed, printing ids to mark seen | optional; writes only to its cache |
+| `event` | records an event pushed to it on stdin (`muxdash event <source>`); exit 0 when something changed, printing ids to mark seen | optional; writes only to its cache |
 
 Every item has the same basic shape: `id`, `title`, `status`, `updated`
 (epoch seconds) and `url`. Optional extras:
@@ -123,52 +123,52 @@ internally:
   the title, last prompt and reply from its transcript, and this turn's
   sub-agents as indented rows. Its spark shows activity over the last hour and
   how full the context is (`context_window` in its config). Hooks in `~/.claude/settings.json` (async, all
-  calling `panel event agents`) add what the files can't say: `●` finished
+  calling `muxdash event agents`) add what the files can't say: `●` finished
   (Stop, SubagentStop), `?` waiting on a permission prompt (also in the status
   column), and prompting the session clears the mark and its sub-agents. The
   last known state of every session is kept (`known/`), for showing or resuming
   ended sessions later. ctrl-o jumps to the session's tmux pane.
 
-## 3. The engine: `~/.scripts/panel`
+## 3. The engine: `muxdash`
 
-- **`panel up`** builds the tmux session from a layout: one window per
+- **`muxdash up`** builds the tmux session from a layout: one window per
   context, one pane per entry. The fetcher runs in its own session,
-  `panel-fetcher` (`tmux attach -t panel-fetcher` to watch it). Run again, it repairs the
+  `muxdash-fetcher` (`tmux attach -t muxdash-fetcher` to watch it). Run again, it repairs the
   session: windows the layout has but the session lacks (known by their
-  `@panel_name`) come back in the layout's order, and windows or a fetcher
+  `@muxdash_name`) come back in the layout's order, and windows or a fetcher
   that lost their program (a tmux restore such as tmux-resurrect brings them
-  back as plain shells) start it again in place. Every pane panel starts is
-  marked (`@panel_pane`), which is how it tells. Nothing else is touched.
-  `panel up -d` does the same without switching to it. **hyper+p**
-  (Hammerspoon, `~/.scripts/panel-open`) opens the session from anywhere:
+  back as plain shells) start it again in place. Every pane muxdash starts is
+  marked (`@muxdash_pane`), which is how it tells. Nothing else is touched.
+  `muxdash up -d` does the same without switching to it. **hyper+p**
+  (Hammerspoon, `muxdash-open`) opens the session from anywhere:
   it switches the last-used tmux client to it and brings kitty forward, or opens
   a kitty window attached to it when there is none.
-- **The fetcher** (`panel fetcher`) loops every 15 seconds and fetches each
+- **The fetcher** (`muxdash fetcher`) loops every 15 seconds and fetches each
   unit whose interval has passed. Each fetch writes the list and a status file
   (`ok`, or the error, which becomes the pane's header). It pauses after
   `pause_when_idle` without keyboard or mouse input, and restarts itself when
-  `panel` changes, so it never runs old code.
+  `muxdash` changes, so it never runs old code.
 - **Locks**: each unit has a lock, so a ctrl-r fetch and the fetcher can't
   overlap ("already fetching").
-- **Views**: each pane runs `panel view <pane>`, an fzf list fed by
-  `panel _lines`, which turns cached items into lines (marker, key, status,
+- **Views**: each pane runs `muxdash view <pane>`, an fzf list fed by
+  `muxdash _lines`, which turns cached items into lines (marker, key, status,
   countdown or age, spark, title). Columns size themselves to fit.
-- **Pushes**: `panel event <source>` hands stdin to the source's `event`; when
+- **Pushes**: `muxdash event <source>` hands stdin to the source's `event`; when
   something changed it fetches the source's open panes at once and marks what
   the source says as seen. It never fails or prints, since hooks call it.
 - **Live refresh**: each open view has its own socket (`fzf.<pid>.sock`).
   After a fetch, the fetcher sends "reload" to every open view of that pane;
   the list updates without moving the cursor.
-- **Images**: a preview starting with `<!-- panel:image <path> -->` gets that
+- **Images**: a preview starting with `<!-- muxdash:image <path> -->` gets that
   picture drawn above the text (`kitten icat` with unicode placeholders, which
-  pass through tmux and fzf; `panel up` turns on `allow-passthrough` for
-  panel's windows).
-- **tmux keys**: `panel.tmux` binds them; tmux.conf loads it with
-  `run-shell ~/.config/panel/panel.tmux` (or a plugin manager). Options, set
-  before it: `@panel-bin` (the engine, default `bin/panel` beside it; here
-  `~/.scripts/panel`), `@panel-hud-key` (default `A`, `off` for none) and
-  `@panel-key` (a key that builds and opens the session; off by default).
-- **Preview**: fzf calls `panel _preview`, which runs the source's `preview`
+  pass through tmux and fzf; `muxdash up` turns on `allow-passthrough` for
+  muxdash's windows).
+- **tmux keys**: `muxdash.tmux` binds them; tmux.conf loads it with
+  `run-shell ~/.config/muxdash/muxdash.tmux` (or a plugin manager). Options, set
+  before it: `@muxdash-bin` (the engine, default `bin/muxdash` beside it; here
+  `muxdash`), `@muxdash-hud-key` (default `A`, `off` for none) and
+  `@muxdash-key` (a key that builds and opens the session; off by default).
+- **Preview**: fzf calls `muxdash _preview`, which runs the source's `preview`
   and renders the Markdown with glow (glow's own style, e.g. Catppuccin).
   Enter opens the same preview full-screen in glow's pager.
 - **Per-view state**: small files keyed by the fzf instance's pid hold which
@@ -218,12 +218,12 @@ summary of the `later` view.
 kitty maps cmd-f and cmd+shift+h to the alt keys: kitty has its own cmd-f
 (scrollback search), and AeroSpace holds option-h.
 
-## The HUD: `panel hud`
+## The HUD: `muxdash hud`
 
 A full-screen assistant over everything, purely for show: cmd+shift+a (kitty)
 sends prefix A, which opens it in a borderless tmux popup; esc closes it, space
 skips the boot or repeats the briefing, and each system's key (shown beside
-it) jumps to its window in the panel session, from anywhere (the popup then
+it) jumps to its window in the muxdash session, from anywhere (the popup then
 closes). A pane's `key` in the config picks it (case matters, digits work: aws
 is `a`, agents `A` on mantis); without one, a letter of its title. Code in `hud/` (Python, standard
 library only).
@@ -283,7 +283,7 @@ battery come from the Mac itself.
 1. **Panes and previews never call an API.** Everything shown comes from the
    cache: instant, works offline, can't hammer a service.
 2. **Sources are separate from the engine,** so adding a service doesn't touch
-   `panel`.
+   `muxdash`.
 3. **Quiet by default:** markers only for real change, an idle pause, hidden
    views, exclusions.
 4. **No content history:** the cache holds only the current state. The only
@@ -295,10 +295,10 @@ battery come from the Mac itself.
 
 ## Writing a source
 
-1. Create `sources/<name>` (executable), reading `$PANEL_SOURCE_CACHE` (its own
-   cache folder) and `$PANEL_SOURCE_CONFIG` (its `sources.<name>` settings as
-   JSON). `$PANEL_SINCE` is the last good fetch of the unit (epoch), if any.
-   `$PANEL_HOME/lib` has `summary.jq` (`jq -L "$PANEL_HOME/lib" 'include "summary"; ...'`).
+1. Create `sources/<name>` (executable), reading `$MUXDASH_SOURCE_CACHE` (its own
+   cache folder) and `$MUXDASH_SOURCE_CONFIG` (its `sources.<name>` settings as
+   JSON). `$MUXDASH_SINCE` is the last good fetch of the unit (epoch), if any.
+   `$MUXDASH_HOME/lib` has `summary.jq` (`jq -L "$MUXDASH_HOME/lib" 'include "summary"; ...'`).
 2. `fetch <query>`: print a JSON array of items on stdout; errors on stderr
    (the last lines become the pane's header) and a non-zero exit.
 3. `preview <id>`: print Markdown, from the cache only.

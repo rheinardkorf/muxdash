@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# panel source: Jira, through Atlassian's acli (log in once: acli jira auth login).
+# muxdash source: Jira, through Atlassian's acli (log in once: acli jira auth login).
 #
 #   jira fetch <jql>     list the tickets, and refresh the cached details
 #                        (fields + comments) of new or changed ones
@@ -10,7 +10,7 @@
 #   jira search <words>  "<key>\t<snippet>" for cached tickets whose summary,
 #                        description, fields or comments contain all the words
 #
-# Config (.sources.jira in panel's config.json), all optional:
+# Config (.sources.jira in muxdash's config.json), all optional:
 #   site    Atlassian site for links (default: the one acli is logged in to)
 #   labels  {"customfield_10325": "Justification", ...}: request fields to show
 #           first, in this order. acli can't list field names, so name them here.
@@ -20,9 +20,9 @@ emulate -L zsh
 setopt extendedglob pipefail
 zmodload zsh/datetime
 
-cache="${PANEL_SOURCE_CACHE:?run me through panel}"
+cache="${MUXDASH_SOURCE_CACHE:?run me through muxdash}"
 items="$cache/items"
-conf="$PANEL_SOURCE_CONFIG"
+conf="$MUXDASH_SOURCE_CONFIG"
 [[ -n $conf ]] || conf='{}'
 
 fetch() {
@@ -32,8 +32,8 @@ fetch() {
   # Same search, only what changed since the last good fetch. Comes before the
   # list, so nothing that changes in between is missed.
   base=${jql%%(#i)[[:space:]]##order[[:space:]]##by[[:space:]]*}
-  if [[ -n $PANEL_SINCE ]]; then
-    mins=$(( (EPOCHSECONDS - PANEL_SINCE) / 60 + 2 ))
+  if [[ -n $MUXDASH_SINCE ]]; then
+    mins=$(( (EPOCHSECONDS - MUXDASH_SINCE) / 60 + 2 ))
     changed=( ${(f)"$(acli jira workitem search --jql "($base) AND updated >= -${mins}m" \
       --fields key --paginate --json | jq -r '.[].key')"} ) || return 1
   fi
@@ -43,7 +43,7 @@ fetch() {
 
   # Details: new tickets, changed ones, and all of them on a pane's first fetch.
   for k in $keys; do
-    if [[ -z $PANEL_SINCE || ! -f $items/$k.json ]] || (( ${changed[(Ie)$k]} )); then
+    if [[ -z $MUXDASH_SINCE || ! -f $items/$k.json ]] || (( ${changed[(Ie)$k]} )); then
       need+=$k
     else
       touch $items/$k.json   # still listed: keep it from being pruned
@@ -117,7 +117,7 @@ preview() {
       elif .type == "codeBlock" then "```\(.attrs.language // "")\n" + kids + "\n```\n\n"
       elif .type == "blockquote" then (kids | rtrim | indent("> ")) + "\n\n"
       elif .type == "rule" then "---\n\n"
-      elif .type == "panel" then (kids | rtrim | indent("> ")) + "\n\n"
+      elif .type == "muxdash" then (kids | rtrim | indent("> ")) + "\n\n"
       elif (.type | test("^media")) then "*[attachment]*\n\n"
       elif .type == "table" then ((.content // []) | map("| " + ((.content // []) | map(adf | rtrim | oneline) | join(" | ")) + " |")) as $rows
         | ($rows[0] // "") + "\n" + (if $rows | length > 0 then "|" + ((.content[0].content // []) | map(" --- |") | join("")) + "\n" else "" end)
@@ -223,9 +223,9 @@ search() {
 }
 
 # summary <view>: the HUD's line (and briefing sentences) for one view, from the
-# facts on stdin (see ~/.config/panel/lib/summary.jq); prints JSON
+# facts on stdin (see ~/.config/muxdash/lib/summary.jq); prints JSON
 summary() {
-  jq -c -L "${PANEL_HOME:-${PANEL_CONFIG_DIR:-$HOME/.config/panel}}/lib" 'include "summary";
+  jq -c -L "${MUXDASH_HOME:-${MUXDASH_CONFIG_DIR:-$HOME/.config/muxdash}}/lib" 'include "summary";
     ((.next.at // 0) - .now) as $in
     | if .view == "assigned" then {line: "\(.count) assigned", word: "linked"}
       elif .view == "mentioned" then {line: (if .unseen > 0 then "\(.unseen) new mentions" else null end), word: "linked"}

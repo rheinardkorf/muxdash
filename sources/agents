@@ -1,11 +1,11 @@
 #!/usr/bin/env zsh
-# panel source: running agents (Claude Code sessions for now) and their sub-agents.
+# muxdash source: running agents (Claude Code sessions for now) and their sub-agents.
 #
 #   agents fetch active     every running session, with this turn's sub-agents
 #   agents preview <id>     a session (or sub-agent) as Markdown, from the cache
 #   agents search <words>   "<id>\t<snippet>" for sessions whose name, title, folder,
 #                           last prompt or last reply have all the words
-#   agents event            a Claude Code hook payload on stdin (through `panel event
+#   agents event            a Claude Code hook payload on stdin (through `muxdash event
 #                           agents`): records it; exit 0 when something changed, and
 #                           prints the ids to mark seen
 #
@@ -21,7 +21,7 @@
 # The spark column: activity over the last hour (messages per 5 minutes, blue),
 # then how full the context is (green / yellow / red) and its size in tokens.
 #
-# Config (.sources.agents in panel's config), all optional:
+# Config (.sources.agents in muxdash's config), all optional:
 #   claude_dir       default ~/.claude
 #   context_window   tokens in a full context: a number, or per model
 #                    {"claude-sonnet-5-5": 200000, "*": 1000000} (default 1000000)
@@ -30,8 +30,8 @@ setopt extendedglob pipefail
 zmodload zsh/datetime
 zmodload -F zsh/stat b:zstat
 
-cache="${PANEL_SOURCE_CACHE:?run me through panel}"
-conf="$PANEL_SOURCE_CONFIG"
+cache="${MUXDASH_SOURCE_CACHE:?run me through muxdash}"
+conf="$MUXDASH_SOURCE_CONFIG"
 [[ -n $conf ]] || conf='{}'
 claude_dir="$(jq -r '.claude_dir // empty' <<<"$conf")"
 claude_dir="${${claude_dir:-$HOME/.claude}/#\~/$HOME}"
@@ -289,10 +289,10 @@ search() {
     | [.sessionId, ($text[$from:$i + 70] | if $from > 0 then sub("^\\S*\\s"; "") else . end | gsub("\\t"; " "))] | @tsv' $cache/sessions.json
 }
 
-# A hook payload on stdin. Times come from panel (PANEL_EVENT_AT, taken when the
+# A hook payload on stdin. Times come from muxdash (MUXDASH_EVENT_AT, taken when the
 # hook started), so events handled out of order still compare right.
 event() {
-  local input="$(cat)" at=${PANEL_EVENT_AT:-$EPOCHREALTIME} ev sid tp ntype msg aid st
+  local input="$(cat)" at=${MUXDASH_EVENT_AT:-$EPOCHREALTIME} ev sid tp ntype msg aid st
   # one field per line (a tab-separated read would merge empty fields)
   local -a f=( "${(@f)$(jq -r '[.hook_event_name, .session_id, .transcript_path, .notification_type, .agent_id]
       | map(. // "" | tostring | gsub("\n"; " ")) | .[]' <<<"$input" 2>/dev/null)}" )
@@ -325,9 +325,9 @@ event() {
 }
 
 # summary <view>: the HUD's line (and briefing sentences) for one view, from the
-# facts on stdin (see ~/.config/panel/lib/summary.jq); prints JSON
+# facts on stdin (see ~/.config/muxdash/lib/summary.jq); prints JSON
 summary() {
-  jq -c -L "${PANEL_HOME:-${PANEL_CONFIG_DIR:-$HOME/.config/panel}}/lib" 'include "summary";
+  jq -c -L "${MUXDASH_HOME:-${MUXDASH_CONFIG_DIR:-$HOME/.config/muxdash}}/lib" 'include "summary";
     def name: if (.key // "·") != "·" then .key else (.title | clean | split(" ")[0]) end;
     [.items[] | select(.kind != null and (.id | startswith("sub:") | not))] as $s
     | ([$s[] | select(.status == "busy")] | length) as $busy

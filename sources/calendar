@@ -1,12 +1,12 @@
 #!/usr/bin/env zsh
-# panel source: Google Calendar, through gog (read-only; log in once: gog auth add).
+# muxdash source: Google Calendar, through gog (read-only; log in once: gog auth add).
 #
 #   calendar fetch upcoming   events from today to the next `days` days, in time order
 #   calendar preview <id>     an event as Markdown, from the cache
 #   calendar search <words>   "<id>\t<snippet>" for cached events whose title, notes,
 #                             location, organizer, people or attachments have all the words
 #
-# Config (.sources.calendar in panel's config), all optional:
+# Config (.sources.calendar in muxdash's config), all optional:
 #   account     gog account (default: gog's default account)
 #   calendars   ["primary", "Time Blocks", ...] (default: primary)
 #   days        how many days ahead (default 7)
@@ -18,8 +18,8 @@ setopt extendedglob pipefail
 zmodload zsh/datetime
 path=($HOME/Development/go/bin $HOME/go/bin $path)
 
-cache="${PANEL_SOURCE_CACHE:?run me through panel}"
-conf="$PANEL_SOURCE_CONFIG"
+cache="${MUXDASH_SOURCE_CACHE:?run me through muxdash}"
+conf="$MUXDASH_SOURCE_CONFIG"
 [[ -n $conf ]] || conf='{}'
 
 # gog, read-only and never prompting
@@ -124,9 +124,9 @@ search() {
 }
 
 # summary <view>: the HUD's line (and briefing sentences) for one view, from the
-# facts on stdin (see ~/.config/panel/lib/summary.jq); prints JSON
+# facts on stdin (see ~/.config/muxdash/lib/summary.jq); prints JSON
 summary() {
-  jq -c -L "${PANEL_HOME:-${PANEL_CONFIG_DIR:-$HOME/.config/panel}}/lib" 'include "summary";
+  jq -c -L "${MUXDASH_HOME:-${MUXDASH_CONFIG_DIR:-$HOME/.config/muxdash}}/lib" 'include "summary";
     .now as $now
     | if .next then ((.next.at - $now) as $in | (.next.title | clean) as $t
         | {line: "next: \($t) in \($in | span)", word: "synced",

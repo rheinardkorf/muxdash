@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# panel source: AWS, through the aws CLI.
+# muxdash source: AWS, through the aws CLI.
 #
 #   aws fetch alarms           every CloudWatch alarm (metric and composite), firing first
 #   aws fetch dynamodb         every table with its configuration: PITR, indexes, TTL,
@@ -12,7 +12,7 @@
 #
 # Use them as views of one pane: "views": ["alarms", "cloudformation"].
 #
-# Config (.sources.aws in panel's config):
+# Config (.sources.aws in muxdash's config):
 #   profile      AWS profile to use (required)
 #   regions      ["us-east-1", ...]   (default: the profile's region)
 #   login_hint   shown as is when the credentials have expired, e.g. "use aws-mfa-login"
@@ -21,8 +21,8 @@ emulate -L zsh
 setopt extendedglob pipefail
 zmodload zsh/datetime
 
-cache="${PANEL_SOURCE_CACHE:?run me through panel}"
-conf="$PANEL_SOURCE_CONFIG"
+cache="${MUXDASH_SOURCE_CACHE:?run me through muxdash}"
+conf="$MUXDASH_SOURCE_CONFIG"
 [[ -n $conf ]] || conf='{}'
 profile="$(jq -r '.profile // empty' <<<"$conf")"
 hint="$(jq -r '.login_hint // empty' <<<"$conf")"
@@ -156,7 +156,7 @@ JQ_ALARM_SPARK='def alarm_spark:
 
 fetch_alarms() {
   local all
-  [[ -n $profile ]] || fail "no profile: set sources.aws.profile in panel's config"
+  [[ -n $profile ]] || fail "no profile: set sources.aws.profile in muxdash's config"
   mkdir -p $cache
   in_regions all cloudwatch describe-alarms
   # one file per fetch: the previews read their alarm from it
@@ -226,7 +226,7 @@ preview_alarm() {   # preview_alarm <region/name>
 
 fetch_dynamodb() {
   local all tmp now=$EPOCHSECONDS
-  [[ -n $profile ]] || fail "no profile: set sources.aws.profile in panel's config"
+  [[ -n $profile ]] || fail "no profile: set sources.aws.profile in muxdash's config"
   mkdir -p $cache/dynamodb
   in_regions all dynamodb list-tables
   tmp="$(mktemp -d $cache/.dynamodb.XXXX)"
@@ -296,7 +296,7 @@ preview_dynamodb() {   # preview_dynamodb <region/table>
       def cap: if . and (.ReadCapacityUnits // 0) > 0 then "  ·  \(.ReadCapacityUnits) read / \(.WriteCapacityUnits) write" else "" end;
     "# \($t.TableName)\n",
     "\(if $t.TableStatus == "ACTIVE" then "ACTIVE" else "**\($t.TableStatus)**" end)  ·  \(.region)  ·  created \($t.CreationDateTime | when)  ",
-    # changes before panel first saw the table are unknown
+    # changes before muxdash first saw the table are unknown
     (if .changed_at > (.first_seen // 0) then "Config changed \(.changed_at | when)  "
      else "Config unchanged since watching began (\(.first_seen | when))  " end),
     "About \($t.ItemCount) items, \($t.TableSizeBytes | size)  *(AWS updates these every few hours)*  ",
@@ -331,7 +331,7 @@ preview_dynamodb() {   # preview_dynamodb <region/table>
 # not on every message count change.
 fetch_sqs() {
   local all tmp now=$EPOCHSECONDS
-  [[ -n $profile ]] || fail "no profile: set sources.aws.profile in panel's config"
+  [[ -n $profile ]] || fail "no profile: set sources.aws.profile in muxdash's config"
   mkdir -p $cache
   in_regions all sqs list-queues
   tmp="$(mktemp -d $cache/.sqs.XXXX)"
@@ -415,7 +415,7 @@ preview_sqs() {   # preview_sqs <region/name>
 fetch_cloudformation() {
   local -a regions need
   local region out stacks id f
-  [[ -n $profile ]] || fail "no profile: set sources.aws.profile in panel's config"
+  [[ -n $profile ]] || fail "no profile: set sources.aws.profile in muxdash's config"
   mkdir -p $cache/stacks
   in_regions out cloudformation describe-stacks
   stacks="$(jq -c '[to_entries[] | .key as $r | .value.Stacks[] | . + {Region: $r}]' <<<"$out")"
@@ -514,9 +514,9 @@ preview() {
 }
 
 # summary <view>: the HUD's line (and briefing sentences) for one view, from the
-# facts on stdin (see ~/.config/panel/lib/summary.jq); prints JSON
+# facts on stdin (see ~/.config/muxdash/lib/summary.jq); prints JSON
 summary() {
-  jq -c -L "${PANEL_HOME:-${PANEL_CONFIG_DIR:-$HOME/.config/panel}}/lib" 'include "summary";
+  jq -c -L "${MUXDASH_HOME:-${MUXDASH_CONFIG_DIR:-$HOME/.config/muxdash}}/lib" 'include "summary";
     if .view == "alarms" then
       if .bad > 0 then (.bad | count("alarm"; "alarms")) as $a | (if .bad == 1 then "is" else "are" end) as $are
         | {line: "\(.bad) alarms firing", state: "attention",

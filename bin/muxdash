@@ -1,23 +1,23 @@
 #!/usr/bin/env zsh
-# panel: a tmux control panel of fzf lists over cached data.
+# muxdash: a tmux dashboard of fzf lists over cached data.
 #
-#   panel up [-d] [layout]  build the tmux session "panel" for a layout, or repair it:
+#   muxdash up [-d] [layout]  build the tmux session "muxdash" for a layout, or repair it:
 #                           add the windows it's missing; then switch to it (-d: don't)
-#   panel fetch [pane...]   fetch now (every pane in the config if none given)
-#   panel fetcher [layout]  loop: fetch each pane of the layout when it's due
-#   panel view <pane>       the fzf list for one pane (what each tmux pane runs)
-#   panel hud [window]      the assistant HUD (full screen; cmd+shift+a opens it in a
+#   muxdash fetch [pane...]   fetch now (every pane in the config if none given)
+#   muxdash fetcher [layout]  loop: fetch each pane of the layout when it's due
+#   muxdash view <pane>       the fzf list for one pane (what each tmux pane runs)
+#   muxdash hud [window]      the assistant HUD (full screen; cmd+shift+a opens it in a
 #                           tmux popup): a briefing from the cache, spoken. "window":
 #                           the silent, always-open version (a pane {"type": "hud"})
-#   panel event <source>    hand an event (stdin) to a source, then refresh its panes:
+#   muxdash event <source>    hand an event (stdin) to a source, then refresh its panes:
 #                           for pushes such as Claude Code hooks (always exits 0, silently)
 #
-# Everything shown is read from the cache (~/.cache/panel); only fetching talks
+# Everything shown is read from the cache (~/.cache/muxdash); only fetching talks
 # to the outside world.
 #
-# Config, per machine (name from $PANEL_MACHINE, or the hostname):
-#   ~/.config/panel/config.<machine>.json   committed: this machine's panes and layouts
-#   ~/.config/panel/config.local.json       optional, not committed: merged on top, for
+# Config, per machine (name from $MUXDASH_MACHINE, or the hostname):
+#   ~/.config/muxdash/config.<machine>.json   committed: this machine's panes and layouts
+#   ~/.config/muxdash/config.local.json       optional, not committed: merged on top, for
 #                                           anything that shouldn't be public
 # JSON, with full-line // comments allowed. Keys:
 #   panes    {name: {source, query, every, title}}    every: 30s / 2m / 1h
@@ -65,16 +65,16 @@
 #                                                     (default: glow's own, from glow.yml)
 #
 # Sources are scripts named <name>, looked up in two places, first match wins:
-#   ~/.config/panel/sources/      your own (and your copy of a built-in one, to change it)
-#   $PANEL_HOME/sources/          panel's built-in ones
-# (PANEL_HOME: panel's own files, hud/ lib/ sources/; today that's ~/.config/panel too)
+#   ~/.config/muxdash/sources/      your own (and your copy of a built-in one, to change it)
+#   $MUXDASH_HOME/sources/          muxdash's built-in ones
+# (MUXDASH_HOME: muxdash's own files, hud/ lib/ sources/; today that's ~/.config/muxdash too)
 #   <source> fetch <query>   print the items as JSON: [{id, title, status, updated, url, key?, at?, seen?}]
 #                            (updated in epoch seconds; key: a shorter id for the list;
 #                            at: a start time to count down to; seen: the key seen
 #                            state is kept under, when it isn't the id, e.g. a series;
 #                            spark: a short strip like "▂▅▇▃" with spark_colors, one
 #                            letter per character: g(reen) r(ed) y(ellow) b(lue) d(im)).
-#                            $PANEL_SOURCE_CACHE is theirs to keep more in; $PANEL_SINCE
+#                            $MUXDASH_SOURCE_CACHE is theirs to keep more in; $MUXDASH_SINCE
 #                            is the last good fetch (epoch).
 #                            Also optional: mark (the glyph instead of ● / ◆) and
 #                            mark_color (one letter, as spark_colors, plus o(range));
@@ -82,13 +82,13 @@
 #                            quiet_before: an item you've never looked at counts as
 #                            seen at this time, so it's only marked after a change.
 #   <source> preview <id>    print the preview of one item as Markdown, from the cache
-#                            only (panel renders it with glow)
+#                            only (muxdash renders it with glow)
 #   <source> search <words>  optional: "<id>\t<snippet>" for each cached item whose
 #                            content has all the words (used by alt-f)
 #   <source> run <name> <id>  optional: an action that does something (feature-flags:
 #                            toggle); prints one line; exit 0 = changed, and the source
-#                            has updated its cache: panel then re-lists the view with
-#                            PANEL_FETCH_LOCAL=1 (fetch from the cache only, no calls)
+#                            has updated its cache: muxdash then re-lists the view with
+#                            MUXDASH_FETCH_LOCAL=1 (fetch from the cache only, no calls)
 #   <source> confirm <name> <id>  optional: the question to ask first (first line,
 #                            then detail); nothing printed = no need to ask
 #   <source> action <tag> <id> on|off   optional: a tag was toggled (e.g. rss keeps
@@ -96,10 +96,10 @@
 #   <source> summary <view>  optional: the HUD's line for a view, from its facts on
 #                            stdin ({view, count, unseen, bad, next, error, now, recent, items}):
 #                            prints {line, state: "attention", word, brief: [phrasings
-#                            of one sentence], ticker: [...]} ($PANEL_HOME/lib/summary.jq).
+#                            of one sentence], ticker: [...]} ($MUXDASH_HOME/lib/summary.jq).
 #                            A pane with "summary": "pane" is asked once: stdin is
 #                            {pane: true, views: [facts, ...], now, recent}
-#   <source> event           optional: an event on stdin (panel event); exit 0 when
+#   <source> event           optional: an event on stdin (muxdash event); exit 0 when
 #                            something changed (the source's panes are fetched again),
 #                            printing the ids of items to mark seen
 #
@@ -119,34 +119,34 @@ setopt extendedglob pipefail
 zmodload zsh/system zsh/datetime
 zmodload -F zsh/stat b:zstat
 # Homebrew (Apple Silicon, Intel, Linux) and kitty's kitten (images), where they exist:
-# tmux and launchers start panel with a bare PATH. Sources run through panel, so they get it too
+# tmux and launchers start muxdash with a bare PATH. Sources run through muxdash, so they get it too
 path=(/opt/homebrew/bin(N) /usr/local/bin(N) /home/linuxbrew/.linuxbrew/bin(N)
       /Applications/kitty.app/Contents/MacOS(N) $path)
 typeset -U path
 
-PANEL_CONFIG_DIR="${PANEL_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/panel}"
-PANEL_CACHE="${PANEL_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/panel}"
-PANEL_HOME="${PANEL_HOME:-$PANEL_CONFIG_DIR}"   # panel's own files: hud/, lib/, built-in sources/
-export PANEL_CONFIG_DIR PANEL_HOME                # sources find lib/ through PANEL_HOME
-SESSION=panel
-FETCHER_SESSION=panel-fetcher   # the fetcher's own session: out of the way of panel's windows
+MUXDASH_CONFIG_DIR="${MUXDASH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/muxdash}"
+MUXDASH_CACHE="${MUXDASH_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/muxdash}"
+MUXDASH_HOME="${MUXDASH_HOME:-$MUXDASH_CONFIG_DIR}"   # muxdash's own files: hud/, lib/, built-in sources/
+export MUXDASH_CONFIG_DIR MUXDASH_HOME                # sources find lib/ through MUXDASH_HOME
+SESSION=muxdash
+FETCHER_SESSION=muxdash-fetcher   # the fetcher's own session: out of the way of muxdash's windows
 self="${0:A}"
 
-die() { print -u2 "panel: $*"; exit 1 }
+die() { print -u2 "muxdash: $*"; exit 1 }
 
 # conf [jq args...]: query the config: this machine's file with config.local.json
 # merged on top (objects merge, everything else is replaced), // comment lines stripped
 conf() {
-  local machine=${PANEL_MACHINE//[[:space:]]/} f
+  local machine=${MUXDASH_MACHINE//[[:space:]]/} f
   [[ -n $machine ]] || machine=${(L)HOST%%.*}   # no name given: the hostname, e.g. mando
-  f="$PANEL_CONFIG_DIR/config.$machine.json"
-  [[ -f $f ]] || die "no config for \"$machine\": $f (see config.example.json; or name this machine with PANEL_MACHINE)"
+  f="$MUXDASH_CONFIG_DIR/config.$machine.json"
+  [[ -f $f ]] || die "no config for \"$machine\": $f (see config.example.json; or name this machine with MUXDASH_MACHINE)"
   # merged once into the cache, again only when a config file changes: a view
   # switch asks dozens of questions, and merging each time made it sluggish
-  local merged="$PANEL_CACHE/config.$machine.json" src
-  local -a files=( $f $PANEL_CONFIG_DIR/config.local.json(N) )
+  local merged="$MUXDASH_CACHE/config.$machine.json" src
+  local -a files=( $f $MUXDASH_CONFIG_DIR/config.local.json(N) )
   if [[ ! -s $merged || $f -nt $merged || ( -n $files[2] && $files[2] -nt $merged ) ]]; then
-    mkdir -p $PANEL_CACHE
+    mkdir -p $MUXDASH_CACHE
     for src in $files; do sed -E '/^[[:space:]]*\/\//d' $src; done |
       jq -s 'reduce .[] as $c ({}; . * $c)' > $merged.$$ && mv $merged.$$ $merged || { rm -f $merged.$$; return 1 }
   fi
@@ -212,7 +212,7 @@ hidden_views() {
 # visible_views <pane> [pid]: the views in rotation (hidden ones only when revealed)
 visible_views() {
   local -a views=( ${(f)"$(pane_views $1)"} ) hidden=( ${(f)"$(hidden_views $1)"} )
-  if [[ -n $2 && -f "$PANEL_CACHE/panes/$1/reveal.$2" ]] || (( ! $#hidden )); then
+  if [[ -n $2 && -f "$MUXDASH_CACHE/panes/$1/reveal.$2" ]] || (( ! $#hidden )); then
     print -rl -- $views
   else
     print -rl -- ${views:|hidden}
@@ -230,15 +230,15 @@ cur_unit() {
   local -a views=( ${(f)"$(visible_views $1 $2)"} )
   local v
   (( $#views )) || { print -r -- $1; return }
-  v="$(cat "$PANEL_CACHE/panes/$1/view.$2" 2>/dev/null)"
+  v="$(cat "$MUXDASH_CACHE/panes/$1/view.$2" 2>/dev/null)"
   (( ${views[(Ie)$v]} )) || v=$views[1]
   print -r -- $1/$v
 }
 
-# source_path <source>: the script for a source, yours before panel's built-in one
+# source_path <source>: the script for a source, yours before muxdash's built-in one
 source_path() {
   local d
-  for d in $PANEL_CONFIG_DIR/sources $PANEL_HOME/sources; do
+  for d in $MUXDASH_CONFIG_DIR/sources $MUXDASH_HOME/sources; do
     [[ -x $d/$1 ]] && { print -r -- $d/$1; return }
   done
   return 1
@@ -247,9 +247,9 @@ source_path() {
 # Run a source script with its cache and config.
 run_source() {
   local source=$1 script; shift
-  script="$(source_path $source)" || { print -u2 "panel: no source script: $source"; return 1 }
-  PANEL_SOURCE_CACHE="$PANEL_CACHE/sources/$source" \
-  PANEL_SOURCE_CONFIG="$(conf -c --arg s "$source" '.sources[$s] // {}')" \
+  script="$(source_path $source)" || { print -u2 "muxdash: no source script: $source"; return 1 }
+  MUXDASH_SOURCE_CACHE="$MUXDASH_CACHE/sources/$source" \
+  MUXDASH_SOURCE_CONFIG="$(conf -c --arg s "$source" '.sources[$s] // {}')" \
     $script "$@"
 }
 
@@ -257,7 +257,7 @@ run_source() {
 # own socket (fzf.<pid>.sock); one that doesn't answer is left over, so remove it.
 notify() {
   local pane=${1%%/*} sock pid
-  for sock in "$PANEL_CACHE/panes/$pane"/fzf.*.sock(N=); do
+  for sock in "$MUXDASH_CACHE/panes/$pane"/fzf.*.sock(N=); do
     pid=${${sock:t}//[^0-9]/}
     curl -s -m 2 --unix-socket "$sock" -X POST http://localhost \
       -d "reload($self _lines $pane $pid)" >/dev/null 2>&1 || rm -f "$sock"
@@ -267,9 +267,9 @@ notify() {
 
 # --- fetching -------------------------------------------------------------------
 fetch_pane() {   # fetch_pane <unit>
-  local pane=$1 dir="$PANEL_CACHE/panes/$1" source query since out err fd
+  local pane=$1 dir="$MUXDASH_CACHE/panes/$1" source query since out err fd
   source="$(pane_source $pane)"
-  [[ -n $source ]] || { print -u2 "panel: unknown pane: $pane"; return 1 }
+  [[ -n $source ]] || { print -u2 "muxdash: unknown pane: $pane"; return 1 }
   if [[ $pane == */* ]]; then   # a view: its query, or its name
     query="$(conf --arg p ${pane%%/*} --arg v ${pane#*/} '.panes[$p].views | if type == "object" then .[$v] else $v end')"
   else query="$(conf --arg p $pane '.panes[$p].query // ""')"; fi
@@ -292,14 +292,14 @@ fetch_pane() {   # fetch_pane <unit>
   since="$(jq -r '.ok_at // empty' $dir/meta.json 2>/dev/null)"
   out="$(mktemp $dir/.items.XXXX)" err="$(mktemp $dir/.err.XXXX)"
   # stdin from /dev/null: a fetch must never wait on the terminal it runs in
-  if PANEL_SINCE=$since run_source $source fetch "$query" < /dev/null > $out 2> $err &&
+  if MUXDASH_SINCE=$since run_source $source fetch "$query" < /dev/null > $out 2> $err &&
      jq -e 'type == "array"' $out >/dev/null 2>&1; then
     mv $out $dir/items.json
-    # a local re-list (PANEL_FETCH_LOCAL, after an action) isn't a fetch: the
+    # a local re-list (MUXDASH_FETCH_LOCAL, after an action) isn't a fetch: the
     # "fetched" time and the fetcher's schedule stay as they were
-    [[ -n $PANEL_FETCH_LOCAL ]] ||
+    [[ -n $MUXDASH_FETCH_LOCAL ]] ||
       { jq -n --argjson t $EPOCHSECONDS '{ok_at: $t, fetched_at: $t}' > $dir/.meta && mv $dir/.meta $dir/meta.json }
-  elif [[ -n $PANEL_FETCH_LOCAL ]]; then
+  elif [[ -n $MUXDASH_FETCH_LOCAL ]]; then
     rm -f $out   # a re-list that couldn't: leave the list and meta as they were
   else
     rm -f $out
@@ -316,7 +316,7 @@ layout_panes() { conf --arg l "$1" '. as $c | [.layouts[$l] // {} | .[][]] | uni
 layout_units() { local p; for p in ${(f)"$(layout_panes $1)"}; do pane_units $p; done }
 default_layout() { conf '.layouts | keys_unsorted[0] // empty' }
 
-# Long-running loops (fetcher, view) start again when panel itself changes, so
+# Long-running loops (fetcher, view) start again when muxdash itself changes, so
 # they never keep running old code.
 loaded="$(zstat +mtime $self)"
 changed() { [[ "$(zstat +mtime $self 2>/dev/null)" != $loaded ]] }
@@ -332,7 +332,7 @@ idle_seconds() { ioreg -c IOHIDSystem | awk '/HIDIdleTime/ { print int($NF / 100
 
 fetcher() {
   local layout=${1:-$(default_layout)} pane every last pause idle paused=0
-  print "panel: fetching panes of layout '$layout' when due (ctrl-c stops)"
+  print "muxdash: fetching panes of layout '$layout' when due (ctrl-c stops)"
   while :; do
     # away from the keyboard: fetch nothing until you're back (then whatever is due)
     pause="$(seconds "$(conf '.pause_when_idle // "10m"')")"
@@ -341,24 +341,24 @@ fetcher() {
       (( paused )) || print "$(strftime %H:%M:%S $EPOCHSECONDS)  idle: paused until you're back"
       paused=1
       sleep 15
-      changed && { print "panel changed: restarting"; exec $self fetcher $layout }
+      changed && { print "muxdash changed: restarting"; exec $self fetcher $layout }
       continue
     fi
     (( paused )) && print "$(strftime %H:%M:%S $EPOCHSECONDS)  back: fetching what's due"
     paused=0
     for pane in ${(f)"$(layout_units $layout)"}; do
       every="$(every $pane)"
-      last="$(jq -r '.fetched_at // 0' "$PANEL_CACHE/panes/$pane/meta.json" 2>/dev/null)"
+      last="$(jq -r '.fetched_at // 0' "$MUXDASH_CACHE/panes/$pane/meta.json" 2>/dev/null)"
       (( EPOCHSECONDS - ${last:-0} >= every )) || continue
       print -n "$(strftime %H:%M:%S $EPOCHSECONDS)  $pane ... "
       if fetch_pane $pane; then
-        jq -r 'if .error then "failed: " + .error else "ok" end' "$PANEL_CACHE/panes/$pane/meta.json"
+        jq -r 'if .error then "failed: " + .error else "ok" end' "$MUXDASH_CACHE/panes/$pane/meta.json"
       else
         (( $? == 2 )) && print "already fetching" || print "failed"
       fi
     done
     sleep 15
-    changed && { print "panel changed: restarting"; exec $self fetcher $layout }
+    changed && { print "muxdash changed: restarting"; exec $self fetcher $layout }
   done
 }
 
@@ -368,16 +368,16 @@ fetcher() {
 event() {
   local source=$1 input ids pane unit try
   input="$(cat)"
-  export PANEL_EVENT_AT=$EPOCHREALTIME
+  export MUXDASH_EVENT_AT=$EPOCHREALTIME
   ids="$(print -r -- $input | run_source $source event 2>/dev/null)" || return 0
   for pane in ${(f)"$(conf --arg s $source '.panes | to_entries[] | select(.value.source == $s) | .key' 2>/dev/null)"}; do
     for unit in ${(f)"$(pane_units $pane)"}; do
       # only panes someone is looking at; the fetcher keeps the rest up to date
-      local -a socks=( "$PANEL_CACHE/panes/$pane"/fzf.*.sock(N=) )
+      local -a socks=( "$MUXDASH_CACHE/panes/$pane"/fzf.*.sock(N=) )
       if (( $#socks )); then
         for try in {1..20}; do fetch_pane $unit && break; (( $? == 2 )) || break; sleep 0.25; done
       fi
-      [[ -n $ids && -f "$PANEL_CACHE/panes/$unit/items.json" ]] && mark_seen $unit ${(f)ids} && notify $unit
+      [[ -n $ids && -f "$MUXDASH_CACHE/panes/$unit/items.json" ]] && mark_seen $unit ${(f)ids} && notify $unit
     done
   done
   return 0
@@ -385,11 +385,11 @@ event() {
 
 # --- seen -----------------------------------------------------------------------
 # seen.json: {"<source>:<id>": <updated when you saw it>}. Global, no content.
-SEEN="$PANEL_CACHE/seen.json"
+SEEN="$MUXDASH_CACHE/seen.json"
 
 # tags.json: {"<source>:<id>": {"<tag>": {item, unit, at}}}: actions (alt-r "read
 # later") toggle them; the item is kept with its tag, for the tag views.
-TAGS="$PANEL_CACHE/tags.json"
+TAGS="$MUXDASH_CACHE/tags.json"
 tags_json() { [[ -s $TAGS ]] && cat $TAGS || print '{}' }
 
 # run_action <pane> <pid> <id> <name>: the source's `run <name> <id>`, in the
@@ -408,8 +408,8 @@ run_action() {
   if out="$(run_source $source run $name $id < /dev/null 2>&1)"; then
     say "$out"
     # the list again from the source's cache, which the action has updated: no
-    # fetch (the source re-lists from its cache when PANEL_FETCH_LOCAL is set)
-    { PANEL_FETCH_LOCAL=1 fetch_pane $unit } </dev/null >/dev/null 2>&1 &!
+    # fetch (the source re-lists from its cache when MUXDASH_FETCH_LOCAL is set)
+    { MUXDASH_FETCH_LOCAL=1 fetch_pane $unit } </dev/null >/dev/null 2>&1 &!
   else
     say "${out:-$name failed}"
   fi
@@ -425,7 +425,7 @@ say() {
 # detail); succeeds only on y. Outside tmux there is nowhere to ask: no.
 ask() {
   [[ -n $TMUX ]] || return 1
-  local q="$(mktemp ${TMPDIR:-/tmp}/panel-ask.XXXXXX)" r w h line
+  local q="$(mktemp ${TMPDIR:-/tmp}/muxdash-ask.XXXXXX)" r w h line
   print -r -- "$1" > $q
   w=24; for line in ${(f)1}; do (( ${#line} + 6 > w )) && w=$(( ${#line} + 6 )); done
   h=$(( ${#${(f)1}} + 5 ))
@@ -453,12 +453,12 @@ yesno() {
 toggle_tag() {
   local pane=$1 unit="$(cur_unit $1 $2)" id=$3 tag=$4 source fd tmp state u
   source="$(pane_source $pane)"
-  [[ -n $id && -n $tag && -f "$PANEL_CACHE/panes/$unit/items.json" ]] || return 0
-  : >> $PANEL_CACHE/tags.lock
-  zsystem flock -f fd $PANEL_CACHE/tags.lock || return 1
-  tmp="$(mktemp $PANEL_CACHE/.tags.XXXX)"
+  [[ -n $id && -n $tag && -f "$MUXDASH_CACHE/panes/$unit/items.json" ]] || return 0
+  : >> $MUXDASH_CACHE/tags.lock
+  zsystem flock -f fd $MUXDASH_CACHE/tags.lock || return 1
+  tmp="$(mktemp $MUXDASH_CACHE/.tags.XXXX)"
   tags_json | jq --arg k "$source:$id" --arg id $id --arg tag $tag --arg unit $unit --argjson now $EPOCHSECONDS \
-    --slurpfile items "$PANEL_CACHE/panes/$unit/items.json" '
+    --slurpfile items "$MUXDASH_CACHE/panes/$unit/items.json" '
     ($items[0] | map(select(.id == $id)) | first) as $it
     | if .[$k][$tag] then del(.[$k][$tag]) | (if .[$k] == {} then del(.[$k]) else . end)
       elif $it then .[$k][$tag] = {item: $it, unit: $unit, at: $now}
@@ -482,11 +482,11 @@ JQ_STATE='def state($seen; $src): ($seen["\($src):\(.seen // .id)"] // .quiet_be
 seen_update() {
   local pane=$1 filter=$2; shift 2
   local source="$(pane_source $pane)" fd tmp
-  mkdir -p $PANEL_CACHE; : >> $PANEL_CACHE/seen.lock
-  zsystem flock -f fd $PANEL_CACHE/seen.lock || return 1
-  tmp="$(mktemp $PANEL_CACHE/.seen.XXXX)"
+  mkdir -p $MUXDASH_CACHE; : >> $MUXDASH_CACHE/seen.lock
+  zsystem flock -f fd $MUXDASH_CACHE/seen.lock || return 1
+  tmp="$(mktemp $MUXDASH_CACHE/.seen.XXXX)"
   seen_json | jq --arg src $source --argjson ids "$(print -rl -- $@ | jq -R . | jq -sc .)" \
-    --slurpfile items "$PANEL_CACHE/panes/$pane/items.json" "$filter" > $tmp && mv $tmp $SEEN
+    --slurpfile items "$MUXDASH_CACHE/panes/$pane/items.json" "$filter" > $tmp && mv $tmp $SEEN
   exec {fd}>&-
 }
 mark_seen()   { seen_update $1 'reduce ($items[0][] | select(.id | IN($ids[]))) as $i (.; .["\($src):\($i.seen // $i.id)"] = ($i.updated // 0))' "${@:2}" }
@@ -495,12 +495,12 @@ mark_unseen() { seen_update $1 'reduce ($items[0][] | select(.id | IN($ids[]))) 
 is_unseen() {   # is_unseen <pane> <id>
   jq -e --arg src "$(pane_source $1)" --arg id $2 --argjson seen "$(seen_json)" \
     "$JQ_STATE"' any(.[]; .id == $id and state($seen; $src) != "seen")' \
-    "$PANEL_CACHE/panes/$1/items.json" >/dev/null 2>&1
+    "$MUXDASH_CACHE/panes/$1/items.json" >/dev/null 2>&1
 }
 
 # The cursor landed on an item: mark it seen if it's still there after seen_after.
 on_focus() {
-  local pane=$1 id=$2 dir="$PANEL_CACHE/panes/$1" token=$EPOCHREALTIME delay
+  local pane=$1 id=$2 dir="$MUXDASH_CACHE/panes/$1" token=$EPOCHREALTIME delay
   [[ -n $id ]] || return 0
   print -r -- "$id $token" > $dir/focus
   is_unseen $pane $id || return 0
@@ -519,12 +519,12 @@ on_focus() {
 update_window_name() {
   [[ -n $TMUX_PANE ]] || return 0
   local base p n=0 c seen="$(seen_json)"
-  base="$(tmux show-options -wqv -t $TMUX_PANE @panel_name)"
+  base="$(tmux show-options -wqv -t $TMUX_PANE @muxdash_name)"
   [[ -n $base ]] || return 0
-  for p in ${(f)"$(tmux list-panes -t $TMUX_PANE -F '#{@panel_pane}' | while read -r q; do [[ -n $q ]] && visible_units $q; done)"}; do
-    [[ -f "$PANEL_CACHE/panes/$p/items.json" ]] && pane_counts $p || continue
+  for p in ${(f)"$(tmux list-panes -t $TMUX_PANE -F '#{@muxdash_pane}' | while read -r q; do [[ -n $q ]] && visible_units $q; done)"}; do
+    [[ -f "$MUXDASH_CACHE/panes/$p/items.json" ]] && pane_counts $p || continue
     c="$(jq --arg src "$(pane_source $p)" --argjson seen "$seen" \
-      "$JQ_STATE"' [.[] | select(state($seen; $src) != "seen")] | length' "$PANEL_CACHE/panes/$p/items.json")"
+      "$JQ_STATE"' [.[] | select(state($seen; $src) != "seen")] | length' "$MUXDASH_CACHE/panes/$p/items.json")"
     (( n += c ))
   done
   tmux rename-window -t $TMUX_PANE "$base$( (( n )) && print " ●$n")"
@@ -534,7 +534,7 @@ update_window_name() {
 # One line per item: "<id>\t<display>"; the first line is a header (status of the fetch).
 lines() {   # lines <pane> <pid>
   local pane="$(cur_unit $1 $2)" tabs="" v cur
-  local dir="$PANEL_CACHE/panes/$pane" fetching=""
+  local dir="$MUXDASH_CACHE/panes/$pane" fetching=""
   [[ -f $dir/fetching ]] && kill -0 "$(<$dir/fetching)" 2>/dev/null && fetching=1
   # views: all of them in the header, the one shown in bold, each with its
   # unseen count (●new ◆changed) so the window's ●N can be found
@@ -542,7 +542,7 @@ lines() {   # lines <pane> <pid>
     cur=${pane#*/}
     local -a hidden=( ${(f)"$(hidden_views $1)"} ) views=( ${(f)"$(visible_views $1 $2)"} ) files
     local -A counts
-    files=( $PANEL_CACHE/panes/$1/${^views}/items.json(N) )
+    files=( $MUXDASH_CACHE/panes/$1/${^views}/items.json(N) )
     if (( $#files )); then
       local line
       [[ -s $SEEN ]] || print '{}' > $SEEN
@@ -563,11 +563,11 @@ lines() {   # lines <pane> <pid>
     tabs+="(tab)  ·  "
   fi
   if [[ ! -f $dir/items.json ]]; then
-    print -r -- $'\t'$'\e[2m'"$tabs"$'\e[0m'"waiting for the first fetch... (is 'panel fetcher' running?)"
+    print -r -- $'\t'$'\e[2m'"$tabs"$'\e[0m'"waiting for the first fetch... (is 'muxdash fetcher' running?)"
     return
   fi
   # find mode (alt-f): only items whose content has the words, with a snippet
-  local find="$PANEL_CACHE/panes/$1/find.$2" words="" matches=null
+  local find="$MUXDASH_CACHE/panes/$1/find.$2" words="" matches=null
   if [[ -f $find ]]; then
     words="$(<$find)"
     if [[ -z ${words//[[:space:]]/} ]]; then
@@ -653,7 +653,7 @@ glow_style() {
 
 # preview <pane> <id> [full]: the source's Markdown, rendered by glow to fit the
 # preview pane, or in glow's pager when full.
-# A source's preview may start with "<!-- panel:image <path> -->": the picture is
+# A source's preview may start with "<!-- muxdash:image <path> -->": the picture is
 # drawn above the text with kitty's graphics protocol (unicode placeholders,
 # which survive tmux and fzf; tmux needs allow-passthrough on).
 preview() {
@@ -661,8 +661,8 @@ preview() {
   [[ -n $2 ]] || return 0
   style="$(glow_style)"
   md="$(run_source $source preview $2)"
-  if [[ $md == '<!-- panel:image '* ]]; then
-    img=${${md%%$'\n'*}#<!-- panel:image }; img=${img% -->}
+  if [[ $md == '<!-- muxdash:image '* ]]; then
+    img=${${md%%$'\n'*}#<!-- muxdash:image }; img=${img% -->}
     md=${md#*$'\n'}
   fi
   if [[ $3 == full ]]; then
@@ -682,7 +682,7 @@ preview() {
 # prompt <pane> <pid>: "Title › " or, with views, "Title › view › "
 prompt() {
   local title="$(pane_title $1)" unit="$(cur_unit $1 $2)"
-  local find=""; [[ -f "$PANEL_CACHE/panes/$1/find.$2" ]] && find=$'\e[38;2;249;226;175;1m'"find › "$'\e[0m'
+  local find=""; [[ -f "$MUXDASH_CACHE/panes/$1/find.$2" ]] && find=$'\e[38;2;249;226;175;1m'"find › "$'\e[0m'
   if [[ $unit == */* ]]; then print -r -- "$title › ${unit#*/} › $find"; else print -r -- "$title › $find"; fi
 }
 
@@ -691,7 +691,7 @@ prompt() {
 # still happens)
 remember_cursor() {
   local cur="$(cur_unit $1 $2)"
-  [[ -n $3 ]] && print -r -- $3 > "$PANEL_CACHE/panes/$1/cursor.$2.${cur#*/}"
+  [[ -n $3 ]] && print -r -- $3 > "$MUXDASH_CACHE/panes/$1/cursor.$2.${cur#*/}"
 }
 
 # switch_view <pane> <pid> <+1|-1>: show the next / previous view. Each view keeps
@@ -699,7 +699,7 @@ remember_cursor() {
 # new view's list has loaded (restore_cursor).
 switch_view() {
   local -a views=( ${(f)"$(visible_views $1 $2)"} )
-  local cur i dir="$PANEL_CACHE/panes/$1"
+  local cur i dir="$MUXDASH_CACHE/panes/$1"
   (( $#views )) || return 0
   cur="$(cur_unit $1 $2)"; cur=${cur#*/}
   i=${views[(Ie)$cur]}
@@ -715,16 +715,16 @@ switch_view() {
 # put the cursor back on that view's remembered item, else at the top. Prints
 # the fzf action; nothing for any other reload (a fetch keeps the cursor).
 restore_cursor() {
-  local f="$PANEL_CACHE/panes/$1/cursor.$2.pending"
+  local f="$MUXDASH_CACHE/panes/$1/cursor.$2.pending"
   [[ -f $f ]] || return 0
   # with a query typed, or in find mode, rows aren't in item order: just the top
-  if [[ -n $3 || -f $PANEL_CACHE/panes/$1/find.$2 ]]; then print -r -- first; else cat $f; fi
+  if [[ -n $3 || -f $MUXDASH_CACHE/panes/$1/find.$2 ]]; then print -r -- first; else cat $f; fi
   rm -f $f
 }
 
 # toggle_find <pane> <pid>: switch find mode; prints the fzf actions to do it
 toggle_find() {
-  local f="$PANEL_CACHE/panes/$1/find.$2" redraw="transform-prompt($self _prompt $1 $2)+reload($self _lines $1 $2)"
+  local f="$MUXDASH_CACHE/panes/$1/find.$2" redraw="transform-prompt($self _prompt $1 $2)+reload($self _lines $1 $2)"
   local title="$(pane_title $1 | tr -d '()')"
   if [[ -f $f ]]; then
     rm -f $f
@@ -737,21 +737,21 @@ toggle_find() {
 
 # toggle_reveal <pane> <pid>: show / hide hidden views; prints the fzf actions
 toggle_reveal() {
-  local f="$PANEL_CACHE/panes/$1/reveal.$2"
+  local f="$MUXDASH_CACHE/panes/$1/reveal.$2"
   if [[ -f $f ]]; then rm -f $f; else : > $f; fi
   print -r -- "transform-prompt($self _prompt $1 $2)+reload($self _lines $1 $2)"
 }
 
 # esc_key <pane> <pid>: leave find mode, or else clear the query
 esc_key() {
-  if [[ -f "$PANEL_CACHE/panes/$1/find.$2" ]]; then toggle_find $1 $2; else print -r -- clear-query; fi
+  if [[ -f "$MUXDASH_CACHE/panes/$1/find.$2" ]]; then toggle_find $1 $2; else print -r -- clear-query; fi
 }
 
 # find <pane> <pid> <words>: remember what to find, then list
-find_words() { print -r -- "$3" > "$PANEL_CACHE/panes/$1/find.$2"; lines $1 $2 }
+find_words() { print -r -- "$3" > "$MUXDASH_CACHE/panes/$1/find.$2"; lines $1 $2 }
 
 open_url() {   # open_url <unit> <id>
-  local url="$(jq -r --arg id $2 '.[] | select(.id == $id) | .url // empty' "$PANEL_CACHE/panes/$1/items.json")"
+  local url="$(jq -r --arg id $2 '.[] | select(.id == $id) | .url // empty' "$MUXDASH_CACHE/panes/$1/items.json")"
   case $url in
     ("") return 0 ;;
     (tmux:*) tmux switch-client -t "${url#tmux:}" 2>/dev/null ;;
@@ -760,12 +760,12 @@ open_url() {   # open_url <unit> <id>
 }
 
 view() {
-  local pane=$1 dir="$PANEL_CACHE/panes/$1" sock title
+  local pane=$1 dir="$MUXDASH_CACHE/panes/$1" sock title
   [[ -n "$(pane_source $pane)" ]] || die "unknown pane: $pane"
   mkdir -p $dir
   sock=$dir/fzf.$$.sock   # this view's own: a pane can be open more than once
   title="$(conf --arg p $pane '.panes[$p].title // $p')"
-  [[ -n $TMUX_PANE ]] && tmux set-option -p -t $TMUX_PANE @panel_pane $pane
+  [[ -n $TMUX_PANE ]] && tmux set-option -p -t $TMUX_PANE @muxdash_pane $pane
   # where the preview goes: the default (beside the list only if the preview
   # gets 110 columns, else under it), or the pane's own "preview"
   # the pane's actions: a key toggles a tag on the item under the cursor, or runs a
@@ -819,15 +819,15 @@ view() {
   done
 }
 
-# hud [window]: the assistant HUD ($PANEL_HOME/hud) over the default layout's panes
+# hud [window]: the assistant HUD ($MUXDASH_HOME/hud) over the default layout's panes
 hud() {
   local mode=${1:-popup} job user
   user="$(conf '.assistant.user // empty')"
   [[ -n $user ]] || user="$(id -F 2>/dev/null)"; user=${user%% *}
-  job="$(mktemp "${TMPDIR:-/tmp}/panel-hud.XXXXXX")"
+  job="$(mktemp "${TMPDIR:-/tmp}/muxdash-hud.XXXXXX")"
   # every unit of the layout, in order, with what the HUD needs to know about it
-  conf --arg l "$(default_layout)" --arg user "$user" --arg cache "$PANEL_CACHE" --arg mode $mode \
-    --arg config_dir "$PANEL_CONFIG_DIR" --arg home "$PANEL_HOME" --arg files "$(print -rl -- $PANEL_CONFIG_DIR/config.*.json(N))" '
+  conf --arg l "$(default_layout)" --arg user "$user" --arg cache "$MUXDASH_CACHE" --arg mode $mode \
+    --arg config_dir "$MUXDASH_CONFIG_DIR" --arg home "$MUXDASH_HOME" --arg files "$(print -rl -- $MUXDASH_CONFIG_DIR/config.*.json(N))" '
     . as $c | {assistant: (.assistant // {}), user: $user, cache: $cache, mode: $mode,
       windows: ($c.layouts[$l] // {}), sources: ($c.sources // {}), config_dir: $config_dir, home: $home,
       source_dirs: ["\($config_dir)/sources", "\($home)/sources"],
@@ -846,18 +846,18 @@ hud() {
         # HUD-only sources (assistant.sources): no pane, window or fetch; asked for a summary
         + [(.assistant.sources // [])[] | {unit: "hud/\(.source)", pane: "hud:\(.source)", view: null, source: .source,
             title: (.title // .source), key: .key, open: .open, hidden: false, summary: true, hud_only: true}] }' > $job || die "can't read the config"
-  [[ $mode == window ]] || exec python3 -I "$PANEL_HOME/hud/hud.py" $job
-  python3 -I "$PANEL_HOME/hud/hud.py" $job
+  [[ $mode == window ]] || exec python3 -I "$MUXDASH_HOME/hud/hud.py" $job
+  python3 -I "$MUXDASH_HOME/hud/hud.py" $job
 }
 
-# hud_window: the HUD as a panel window: starts again if it ends (ctrl-c), and
-# when panel changes
+# hud_window: the HUD as a muxdash window: starts again if it ends (ctrl-c), and
+# when muxdash changes
 hud_window() {
   trap 'exit 0' HUP TERM
   while :; do
     hud window
     [[ -t 0 ]] || exit 0   # no terminal any more (its pane or server is gone)
-    export PANEL_HUD_NOBOOT=1   # restarts (config or code changed, ctrl-c) skip the boot
+    export MUXDASH_HUD_NOBOOT=1   # restarts (config or code changed, ctrl-c) skip the boot
     sleep 0.5
     changed && exec $self hud window
   done
@@ -871,13 +871,13 @@ pane_cmd() {
 
 # up [layout]: build the session from the layout; if it's already there, repair
 # it: add the windows the layout has and the session lacks (in the layout's
-# order), and restart the ones that lost their program: every pane panel starts
-# is marked (@panel_pane), so a window with no marked pane is a leftover, e.g. a
+# order), and restart the ones that lost their program: every pane muxdash starts
+# is marked (@muxdash_pane), so a window with no marked pane is a leftover, e.g. a
 # plain shell a tmux restore (tmux-resurrect) brought back under the same name.
-# Windows are known by @panel_name, or their name without the ●N count;
+# Windows are known by @muxdash_name, or their name without the ●N count;
 # nothing else is removed, reordered or changed. The fetcher runs in its own
-# session (panel-fetcher), started or restarted the same way; an old fetch
-# window in the panel session is moved out.
+# session (muxdash-fetcher), started or restarted the same way; an old fetch
+# window in the muxdash session is moved out.
 up() {
   local layout=${1:-$(default_layout)} win w prev="" p id name live
   local -a panes added restarted
@@ -885,11 +885,11 @@ up() {
   [[ -n $layout ]] || die "no layouts in the config"
   [[ -n "$(conf --arg l $layout '.layouts[$l] // empty')" ]] || die "unknown layout: $layout"
   if tmux has-session -t "=$SESSION" 2>/dev/null; then
-    tmux list-windows -t "=$SESSION:" -F '#{window_id} #{?@panel_name,#{@panel_name},#{window_name}}' |
+    tmux list-windows -t "=$SESSION:" -F '#{window_id} #{?@muxdash_name,#{@muxdash_name},#{window_name}}' |
       while read -r id name; do
         name=${name%% [●◆]*}
         have[$name]=$id
-        live="$(tmux list-panes -t $id -F '#{@panel_pane}' | tr -d '[:space:]')"
+        live="$(tmux list-panes -t $id -F '#{@muxdash_pane}' | tr -d '[:space:]')"
         [[ -n $live ]] || stale[$name]=1
       done
   fi
@@ -910,31 +910,31 @@ up() {
       w="$(tmux new-window -d -b -t "=$SESSION:^" -n $win -c ~ -P -F '#{window_id}' "$(pane_cmd $panes[1])")"
     fi
     [[ -z $have[$win] ]] && (( $#have )) && added+=( $win )
-    tmux set-option -w -t $w @panel_name $win
+    tmux set-option -w -t $w @muxdash_name $win
     tmux set-option -w -t $w allow-passthrough on   # preview images (kitty graphics) get through
-    tmux set-option -p -t "$w.{top-left}" @panel_pane $panes[1]
+    tmux set-option -p -t "$w.{top-left}" @muxdash_pane $panes[1]
     for p in $panes[2,-1]; do
-      tmux set-option -p -t "$(tmux split-window -d -h -t $w -c ~ -P -F '#{pane_id}' "$(pane_cmd $p)")" @panel_pane $p
+      tmux set-option -p -t "$(tmux split-window -d -h -t $w -c ~ -P -F '#{pane_id}' "$(pane_cmd $p)")" @muxdash_pane $p
     done
     (( $#panes > 1 )) && tmux select-layout -t $w even-horizontal >/dev/null
     prev=$w
   done
   if ! tmux has-session -t "=$FETCHER_SESSION" 2>/dev/null; then
     w="$(tmux new-session -d -s $FETCHER_SESSION -n fetch -c ~ -P -F '#{pane_id}' "$self fetcher $layout")"
-    tmux set-option -p -t $w @panel_pane fetcher
+    tmux set-option -p -t $w @muxdash_pane fetcher
     (( $#have )) && added+=( "the $FETCHER_SESSION session" )
-  elif [[ -z "$(tmux display -p -t "=$FETCHER_SESSION:" '#{@panel_pane}')" ]]; then   # restored, not running
+  elif [[ -z "$(tmux display -p -t "=$FETCHER_SESSION:" '#{@muxdash_pane}')" ]]; then   # restored, not running
     tmux respawn-pane -k -t "=$FETCHER_SESSION:" -c ~ "$self fetcher $layout"
-    tmux set-option -p -t "=$FETCHER_SESSION:" @panel_pane fetcher
+    tmux set-option -p -t "=$FETCHER_SESSION:" @muxdash_pane fetcher
     restarted+=( "the fetcher" )
   fi
-  if [[ -n $have[fetch] ]]; then   # the fetcher used to be a window of panel itself
+  if [[ -n $have[fetch] ]]; then   # the fetcher used to be a window of muxdash itself
     tmux kill-window -t $have[fetch]
-    print "panel: the fetcher now runs in the $FETCHER_SESSION session (its window in $SESSION is gone)"
+    print "muxdash: the fetcher now runs in the $FETCHER_SESSION session (its window in $SESSION is gone)"
   fi
-  (( $#added )) && print "panel: added ${(j:, :)added}"
-  (( $#restarted )) && print "panel: restarted ${(j:, :)restarted}"
-  [[ -n $PANEL_DETACHED ]] && return 0
+  (( $#added )) && print "muxdash: added ${(j:, :)added}"
+  (( $#restarted )) && print "muxdash: restarted ${(j:, :)restarted}"
+  [[ -n $MUXDASH_DETACHED ]] && return 0
   if [[ -n $TMUX ]]; then tmux switch-client -t "=$SESSION"; else tmux attach -t "=$SESSION"; fi
 }
 
@@ -945,7 +945,7 @@ up() {
 [[ $1 == (up|fetch|fetcher|view|hud) ]] && conf empty
 
 case $1 in
-  up)        if [[ $2 == -d ]]; then PANEL_DETACHED=1 up $3; else up $2; fi ;;
+  up)        if [[ $2 == -d ]]; then MUXDASH_DETACHED=1 up $3; else up $2; fi ;;
   fetch)     shift; (( $# )) || set -- ${(f)"$(conf '.panes | to_entries[] | select(.value.source) | .key')"}
              for p in $@; do
                if [[ $p == */* ]]; then fetch_pane $p
@@ -953,7 +953,7 @@ case $1 in
              done ;;
   fetcher)   fetcher $2 ;;
   hud)       if [[ $2 == window ]]; then hud_window; else hud; fi ;;
-  view)      [[ -n $2 ]] || die "usage: panel view <pane>"; view $2 ;;
+  view)      [[ -n $2 ]] || die "usage: muxdash view <pane>"; view $2 ;;
   event)     [[ -n $2 ]] && event $2 </dev/stdin >/dev/null 2>&1; exit 0 ;;
   _lines)    lines $2 $3 ;;
   _prompt)   prompt $2 $3 ;;
@@ -971,7 +971,7 @@ case $1 in
   _preview)  preview $2 $3 $4 ;;
   _focus)    on_focus "$(cur_unit $2 $3)" $4 ;;
   _open)     open_url "$(cur_unit $2 $3)" $4 ;;
-  _seen_all) u="$(cur_unit $2 $3)"; mark_seen $u ${(f)"$(jq -r '.[].id' "$PANEL_CACHE/panes/$u/items.json")"} ;;
+  _seen_all) u="$(cur_unit $2 $3)"; mark_seen $u ${(f)"$(jq -r '.[].id' "$MUXDASH_CACHE/panes/$u/items.json")"} ;;
   _unseen)   mark_unseen "$(cur_unit $2 $3)" $4 ;;
   *)         sed -n '2,/^emulate/p' $self | sed -e '$d' -e 's/^# \{0,1\}//'; exit 1 ;;
 esac

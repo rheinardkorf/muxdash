@@ -1,16 +1,16 @@
 ---
-name: panel
-description: Answer questions about the user's work from panel's cache, what their fetchers have already gathered (GitHub PRs and Actions runs, running agents, and whatever else this machine's panel shows, such as Jira, AWS, calendar or feeds). Use when the user asks what's waiting on them, what's failing, what's new, or about a specific PR, run, ticket, alarm, meeting or agent session.
+name: muxdash
+description: Answer questions about the user's work from muxdash's cache, what their fetchers have already gathered (GitHub PRs and Actions runs, running agents, and whatever else this machine's muxdash shows, such as Jira, AWS, calendar or feeds). Use when the user asks what's waiting on them, what's failing, what's new, or about a specific PR, run, ticket, alarm, meeting or agent session.
 ---
 
-# panel
+# muxdash
 
-panel is the user's tmux dashboard. Its fetchers call the outside services on a timer and
+muxdash is the user's tmux dashboard. Its fetchers call the outside services on a timer and
 write everything to a cache. You only read that cache, through the `read` script in this
 skill's folder: no network, no API calls. If the cache doesn't have something, say so; don't
-go looking for it elsewhere (no `gh`, no `curl`, no `panel fetch`).
+go looking for it elsewhere (no `gh`, no `curl`, no `muxdash fetch`).
 
-Run `~/.config/panel/skills/panel/read` with one of these, one command at a time.
+Run `~/.config/muxdash/skills/muxdash/read` with one of these, one command at a time.
 
 **A question about everything ("what do I need to know", "anything to worry about") gets
 `read list`** with nothing after it: every pane at once.

@@ -1,4 +1,4 @@
-"""panel hud: speak the briefing, sentence by sentence, with a Kokoro voice.
+"""muxdash hud: speak the briefing, sentence by sentence, with a Kokoro voice.
 
     uv run --no-project --python 3.12 --with kokoro-onnx --with soundfile \
         --with sounddevice python -I speak.py <job.json>

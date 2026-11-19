@@ -1,4 +1,4 @@
-# Helpers for sources' `summary` commands (jq -L ~/.config/panel/lib, then
+# Helpers for sources' `summary` commands (jq -L ~/.config/muxdash/lib, then
 # include "summary";). The input is the unit's facts from the HUD:
 #   {view, count, unseen, bad, next: {title, at}, error, now, recent, items}
 # (recent: the pane's "recent" window in seconds, default 24h)

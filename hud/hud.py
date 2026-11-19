@@ -1,20 +1,20 @@
-"""panel hud: a full-screen assistant HUD over the panel cache. Purely for show.
+"""muxdash hud: a full-screen assistant HUD over the muxdash cache. Purely for show.
 
-    panel hud    (cmd+shift+a: a borderless tmux popup over everything)
+    muxdash hud    (cmd+shift+a: a borderless tmux popup over everything)
 
 Boots ("I.R.I.S. online" and a systems check), then shows an arc reactor, the
 time, the Mac's vitals, a radar of agents and a ticker, while the assistant
-speaks a briefing. Everything it says comes from the panel cache; only CPU,
+speaks a briefing. Everything it says comes from the muxdash cache; only CPU,
 memory and battery come from the Mac itself.
 
 Keys: esc / q close, space skips the boot or repeats the briefing, and each
-system's letter (shown beside it) jumps to its window in the panel session.
+system's letter (shown beside it) jumps to its window in the muxdash session.
 
-As a window in the panel session (job "mode": "window") it stays open and
+As a window in the muxdash session (job "mode": "window") it stays open and
 silent: space speaks the briefing, the cache is read again every 15 seconds,
 and nothing is drawn while the window is off screen. It starts again (without
 the boot) when the config or this code changes, so it never runs stale.
-Run by panel, with a job file: {"assistant": {...}, "user": "...", "cache": "...",
+Run by muxdash, with a job file: {"assistant": {...}, "user": "...", "cache": "...",
 "units": [{unit, pane, view, title, source, hidden}, ...]}
 """
 import concurrent.futures
@@ -187,7 +187,7 @@ class Braille:
             scr.put(ox + cx, oy + cy, chr(0x2800 + m), c)
 
 
-# --- facts from the panel cache ----------------------------------------------------
+# --- facts from the muxdash cache ----------------------------------------------------
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 BAD = re.compile(r"✗|fail|alarm|breach|^\?|dlq: [1-9]", re.I)
 
@@ -244,9 +244,9 @@ def summarize(job, units):
     leaves out ("summary"), or None when the source has no summary (a plain
     count is shown instead)."""
     now = int(time.time())
-    config_dir = job.get("config_dir") or os.path.expanduser("~/.config/panel")
+    config_dir = job.get("config_dir") or os.path.expanduser("~/.config/muxdash")
     home = job.get("home") or config_dir
-    # a source's script: yours (config_dir/sources) before panel's built-in one
+    # a source's script: yours (config_dir/sources) before muxdash's built-in one
     dirs = job.get("source_dirs") or [os.path.join(config_dir, "sources")]
 
     def script(source):
@@ -267,9 +267,9 @@ def summarize(job, units):
         path = script(source)
         if not path:
             return None
-        env = dict(os.environ, PANEL_CONFIG_DIR=config_dir, PANEL_HOME=home,
-                   PANEL_SOURCE_CACHE=os.path.join(job["cache"], "sources", source),
-                   PANEL_SOURCE_CONFIG=json.dumps((job.get("sources") or {}).get(source) or {}))
+        env = dict(os.environ, MUXDASH_CONFIG_DIR=config_dir, MUXDASH_HOME=home,
+                   MUXDASH_SOURCE_CACHE=os.path.join(job["cache"], "sources", source),
+                   MUXDASH_SOURCE_CONFIG=json.dumps((job.get("sources") or {}).get(source) or {}))
         try:
             r = subprocess.run([path, "summary", view or ""],
                                input=json.dumps(facts_in), capture_output=True, text=True, timeout=5, env=env)
@@ -465,7 +465,7 @@ class Voice(threading.Thread):
     def run(self):
         a = self.job["assistant"]
         model_dir = os.path.expanduser(a.get("model_dir", "~/.local/share/kokoro"))
-        if os.environ.get("PANEL_HUD_QUIET"):   # silent (tests): just the typing
+        if os.environ.get("MUXDASH_HUD_QUIET"):   # silent (tests): just the typing
             for i, s in enumerate(self.sentences):
                 self.current, self.length, self.started = i, len(s) / 14, time.time()
                 time.sleep(self.length)
@@ -619,7 +619,7 @@ class Hud:
         self.read()
         self.t0 = time.time()
         self.boot_end = 2.2 + 0.32 * len(self.rows) + 1.1
-        if os.environ.get("PANEL_HUD_NOBOOT"):   # a restart of the window: straight to the HUD
+        if os.environ.get("MUXDASH_HUD_NOBOOT"):   # a restart of the window: straight to the HUD
             self.t0 -= self.boot_end + 1
         # what the window was built from: when one changes, it starts again
         self.watched = {f: mtime(f) for f in (job.get("config_files") or []) + [os.path.abspath(__file__)]}
@@ -637,7 +637,7 @@ class Hud:
         self.units = facts(self.job)
         summarize(self.job, self.units)
         self.rows, panes = systems(self.units, self.now)
-        # each row's letter and the panel window that holds its pane
+        # each row's letter and the muxdash window that holds its pane
         windows = self.job.get("windows") or {}
         chosen = [next((str(f.get("key") or "")[:1] for f in self.units if f["pane"] == pane), "") for pane in panes]
         chosen = ["" if k in RESERVED else k for k in chosen]
@@ -652,7 +652,7 @@ class Hud:
         self.agents = next((f["items"] for f in self.units if f["source"] == "agents"), [])
 
     def jump(self, key):
-        """Go to the window of the system with this letter (in the panel session);
+        """Go to the window of the system with this letter (in the muxdash session);
         True when it went (the popup then closes)."""
         if key in self.opens:   # run it, detached (it opens its own window)
             subprocess.Popen(["/bin/zsh", "-c", self.opens[key]], start_new_session=True,
@@ -661,14 +661,14 @@ class Hud:
         win = self.jumps.get(key)
         if not win:
             return False
-        out = subprocess.run(["tmux", "list-windows", "-t", "=panel:", "-F", "#{window_id} #{@panel_name}"],
+        out = subprocess.run(["tmux", "list-windows", "-t", "=muxdash:", "-F", "#{window_id} #{@muxdash_name}"],
                              capture_output=True, text=True).stdout.split("\n")
         wid = next((line.split()[0] for line in out if line.split()[1:] == [win]), None)
         if not wid:
             return False
         subprocess.run(["tmux", "select-window", "-t", wid], capture_output=True)
-        # and show the panel session, when the HUD is a popup over another one
-        subprocess.run(["tmux", "switch-client", "-t", "=panel"], capture_output=True)
+        # and show the muxdash session, when the HUD is a popup over another one
+        subprocess.run(["tmux", "switch-client", "-t", "=muxdash"], capture_output=True)
         return True
 
     def stale(self):
@@ -817,7 +817,7 @@ def main():
     except Exception:
         pass
     if not job:
-        sys.exit("panel hud: no job")
+        sys.exit("muxdash hud: no job")
     hud = Hud(job)
     signal.signal(signal.SIGHUP, lambda *_: sys.exit(0))   # its terminal closed
     fd = sys.stdin.fileno()

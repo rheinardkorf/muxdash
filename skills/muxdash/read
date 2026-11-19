@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# read: panel's cache, for a model (the panel skill). Reads ~/.cache/panel only: never fetches,
+# read: muxdash's cache, for a model (the muxdash skill). Reads ~/.cache/muxdash only: never fetches,
 # never changes anything. The filtering lives here so the model reads 20 lines, not 200 (a
 # "what's failing" question pulled 190 green Actions runs into its context), and each command is
 # plain enough for harkness to offer "always allow".
@@ -13,9 +13,9 @@
 #   read show <pane> <id>      one item in detail, as Markdown (the source's preview)
 #   read search <pane> <words> items whose content has the words (sources that support it)
 setopt err_exit no_unset pipe_fail
-cache=${PANEL_CACHE:-$HOME/.cache/panel}
+cache=${MUXDASH_CACHE:-$HOME/.cache/muxdash}
 config=( $cache/config.*.json(N) )
-(( $#config )) || { print -u2 "read: no panel cache at $cache (is panel running?)"; exit 1; }
+(( $#config )) || { print -u2 "read: no muxdash cache at $cache (is muxdash running?)"; exit 1; }
 config=$config[1]
 die() { print -u2 "read: $*"; exit 1; }
 
@@ -33,12 +33,12 @@ fresh() { jq -r "$AGE"' if .fetched_at then "fetched \(.fetched_at | age) ago" e
 run_source() {
   local src=$(source_of $1) dir
   [[ -n $src ]] || die "no pane '$1'; try: read panes"
-  for dir in $HOME/.config/panel/sources ${PANEL_HOME:-$HOME/.config/panel}/sources; do
+  for dir in $HOME/.config/muxdash/sources ${MUXDASH_HOME:-$HOME/.config/muxdash}/sources; do
     [[ -x $dir/$src ]] && break
   done
   [[ -x $dir/$src ]] || die "no source script for '$src'"
-  PANEL_SOURCE_CACHE=$cache/sources/$src \
-  PANEL_SOURCE_CONFIG="$(jq -c --arg s $src '.sources[$s] // {}' $config)" \
+  MUXDASH_SOURCE_CACHE=$cache/sources/$src \
+  MUXDASH_SOURCE_CONFIG="$(jq -c --arg s $src '.sources[$s] // {}' $config)" \
     $dir/$src "${@:2}"
 }
 

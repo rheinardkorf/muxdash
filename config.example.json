@@ -1,5 +1,5 @@
 {
-  // Copy to config.<machine>.json (the name: $PANEL_MACHINE, or the hostname,
+  // Copy to config.<machine>.json (the name: $MUXDASH_MACHINE, or the hostname,
   // lowercased). Anything that shouldn't be public goes in config.local.json,
   // merged on top.
   // An item counts as seen after the cursor rests on it this long
@@ -8,7 +8,7 @@
   "pause_when_idle": "10m",
 
   // A pane: a source, a query for it, and how often to fetch
-  // the HUD (panel hud): its name and voice (a Kokoro voice, or a blend)
+  // the HUD (muxdash hud): its name and voice (a Kokoro voice, or a blend)
   "assistant": {
     "name": "A.D.A.",
     "meaning": "Adaptive Daily Attendant",

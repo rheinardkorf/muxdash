@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""panel source: RSS and Atom feeds.
+"""muxdash source: RSS and Atom feeds.
 
     rss fetch '<feeds>'     the articles of these feeds, newest first
     rss preview <id>        an article as Markdown (from the feed, cached)
@@ -25,7 +25,7 @@ Images: each new article's picture is saved in the cache (as JPEG, at most
 800px, through macOS sips), from the feed's media tags or enclosure, else the
 first image in its text, else the article page's og:image (the one time a page
 is read: its head, once per article). The preview starts with
-"<!-- panel:image <path> -->" for panel to draw it.
+"<!-- muxdash:image <path> -->" for muxdash to draw it.
 
 Sparse articles (a link and little else, like Hacker News and Lobsters items):
 their page is read once at fetch time for its description (og:description) and
@@ -49,7 +49,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
-CACHE = os.environ.get("PANEL_SOURCE_CACHE") or sys.exit("rss: run me through panel")
+CACHE = os.environ.get("MUXDASH_SOURCE_CACHE") or sys.exit("rss: run me through muxdash")
 FEEDS = os.path.join(CACHE, "feeds")
 KEEP, KEEP_DAYS = 50, 30
 IMAGES = os.path.join(CACHE, "images")
@@ -72,7 +72,7 @@ for aid, (path, url) in json.load(open(sys.argv[1])).items():
         out[aid] = ""
 json.dump(out, sys.stdout)
 """
-UA = "panel-rss/1.0 (+https://github.com/rheinardkorf/dotfiles)"
+UA = "muxdash-rss/1.0 (+https://github.com/rheinardkorf/dotfiles)"
 
 NS = {"atom": "http://www.w3.org/2005/Atom", "content": "http://purl.org/rss/1.0/modules/content/",
       "dc": "http://purl.org/dc/elements/1.1/", "rss1": "http://purl.org/rss/1.0/",
@@ -464,7 +464,7 @@ def preview(aid):
         if i == aid:
             when = a.get("published") or a["first_seen"]
             if a.get("image") and os.path.exists(a["image"]):
-                print(f"<!-- panel:image {a['image']} -->")
+                print(f"<!-- muxdash:image {a['image']} -->")
             print(f"# {html.unescape(a['title'] or '(untitled)')}\n")
             by = f" · {a['author']}" if a.get("author") else ""
             print(f"**{st.get('title') or st['url']}**{by} · {time.strftime('%a %-d %b %H:%M', time.localtime(when))}  ")
